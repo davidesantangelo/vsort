@@ -66,24 +66,52 @@ jobs:
         -DCMAKE_CXX_FLAGS="-O3 -ffast-math -ftree-vectorize -funroll-loops"
         -S ${{ github.workspace }}
 
-    - name: Create Windows Toolchain File
+    - name: Clean Windows Build Dir
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        Copy-Item "${{ github.workspace }}/.github/workflows/windows-toolchain.cmake" -Destination "${{ github.workspace }}/windows-toolchain.cmake"
+        if (Test-Path ${{ steps.strings.outputs.build-output-dir }}) {
+          Remove-Item -Recurse -Force ${{ steps.strings.outputs.build-output-dir }}
+        }
+        New-Item -ItemType Directory -Path ${{ steps.strings.outputs.build-output-dir }} | Out-Null
+        
+    - name: Create Windows Config File
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        $content = @"
+        # Force static build for Windows
+        # This overrides any project settings
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+        
+        # Force static runtime linkage for MSVC
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+        
+        # Disable automatic DLL exports completely
+        set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS OFF CACHE BOOL "Don't automatically export all symbols" FORCE)
+        
+        # Add optimization flags
+        set(CMAKE_C_FLAGS "/O2 /Ot" CACHE STRING "C flags" FORCE)
+        set(CMAKE_CXX_FLAGS "/O2 /Ot" CACHE STRING "C++ flags" FORCE)
+        "@
+        
+        Set-Content -Path ${{ github.workspace }}/windows_static_config.cmake -Value $content
     
     - name: Configure CMake for Windows
       if: runner.os == 'Windows'
-      # Configure CMake with MSVC using the toolchain file
+      # Configure CMake with MSVC specific flags for Windows
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/windows-toolchain.cmake
+        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
+        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+        -C ${{ github.workspace }}/windows_static_config.cmake
+        -DBUILD_SHARED_LIBS=OFF
         -S ${{ github.workspace }}
 
     - name: Build
-      # Build your program with the given configuration. Note that --config is needed because the default Windows generator is a multi-config generator (Visual Studio generator).
-      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }}
+      # Build your program with the given configuration
+      run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --verbose
 
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
