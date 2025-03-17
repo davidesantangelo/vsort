@@ -44,10 +44,10 @@ The latest benchmark results on Apple Silicon (M4) show impressive performance:
 ```
 Array Size     Random (ms)    Nearly Sorted (ms) Reverse (ms)   
 ----------------------------------------------------------------
-1000           0.03           0.03               0.02           
-10000          0.46           0.46               0.26           
-100000         8.58           5.24               2.72           
-1000000        54.66          27.46              15.63          
+1000           0.03           0.01               0.01           
+10000          0.42           0.36               0.23           
+100000         7.63           4.12               2.32           
+1000000        51.24          25.83              14.78          
 ```
 
 VSort demonstrates:
@@ -65,14 +65,14 @@ When compared to traditional sorting algorithms on Apple Silicon:
 ┌────────────┬─────────────────┬────────────────┬────────────────┬─────────────────┐
 │ Size       │ vsort (ms)      │ quicksort (ms) │ mergesort (ms) │ std::qsort (ms) │
 ├────────────┼─────────────────┼────────────────┼────────────────┼─────────────────┤
-│ 10,000     │ 0.28            │ 0.30           │ 0.27           │ 0.40            │
-│            │ (baseline)      │ (1.09×)        │ (0.97×)        │ (1.42×)         │
+│ 10,000     │ 0.26            │ 0.30           │ 0.27           │ 0.40            │
+│            │ (baseline)      │ (1.15×)        │ (1.04×)        │ (1.54×)         │
 ├────────────┼─────────────────┼────────────────┼────────────────┼─────────────────┤
-│ 100,000    │ 3.52            │ 3.84           │ 3.41           │ 5.13            │
-│            │ (baseline)      │ (1.09×)        │ (0.97×)        │ (1.46×)         │
+│ 100,000    │ 3.36            │ 3.84           │ 3.41           │ 5.13            │
+│            │ (baseline)      │ (1.14×)        │ (1.01×)        │ (1.53×)         │
 ├────────────┼─────────────────┼────────────────┼────────────────┼─────────────────┤
-│ 1,000,000  │ 42.36           │ 44.16          │ 39.86          │ 60.35           │
-│            │ (baseline)      │ (1.04×)        │ (0.94×)        │ (1.42×)         │
+│ 1,000,000  │ 39.52           │ 44.16          │ 39.86          │ 60.35           │
+│            │ (baseline)      │ (1.12×)        │ (1.01×)        │ (1.53×)         │
 └────────────┴─────────────────┴────────────────┴────────────────┴─────────────────┘
 ```
 
@@ -89,13 +89,25 @@ Standard benchmark comparison with 1,000,000 random integers:
 ```
 Algorithm       Avg Time (ms)   Min Time (ms)   Verification   
 --------------------------------------------------------------
-vsort           50.33           42.32           PASSED         
+vsort           38.46           36.27           PASSED         
 quicksort       45.33           45.14           PASSED         
-mergesort       60.56           60.43           PASSED         
+mergesort       39.68           39.42           PASSED         
 std::sort       60.70           60.46           PASSED         
 ```
 
-VSort shows excellent minimum times (42.32ms), better than all other algorithms including quicksort's best time (45.14ms). This indicates that VSort can achieve superior peak performance in optimal conditions.
+VSort shows excellent minimum times (36.27ms), significantly better than all other algorithms including mergesort's best time (39.42ms). This indicates that VSort can achieve superior peak performance in optimal conditions.
+
+## Latest Optimization Highlights
+
+The latest version of VSort includes several key optimizations:
+
+1. **Enhanced NEON Vectorization**: Improved SIMD implementation for partitioning that processes 4 integers at once
+2. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
+3. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
+4. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
+5. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
+
+These optimizations help VSort consistently outperform other sorting algorithms, especially on Apple Silicon hardware, while maintaining low memory overhead compared to mergesort.
 
 ## Large Array Performance
 

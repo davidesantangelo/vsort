@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(vsort 
-    VERSION 0.1.1
+    VERSION 0.2.0
     DESCRIPTION "High-Performance Sorting Algorithm for Apple Silicon"
     LANGUAGES C
 )

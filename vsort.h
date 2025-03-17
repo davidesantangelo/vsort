@@ -1,7 +1,7 @@
 /**
  * VSort: High-Performance Sorting Algorithm for Apple Silicon
  *
- * Version 0.1.1
+ * Version 0.2.0
  *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
@@ -16,9 +16,9 @@
  * Version information
  */
 #define VSORT_VERSION_MAJOR 0
-#define VSORT_VERSION_MINOR 1
+#define VSORT_VERSION_MINOR 2
 #define VSORT_VERSION_PATCH 0
-#define VSORT_VERSION_STRING "0.1.1"
+#define VSORT_VERSION_STRING "0.2.0"
 
 /**
  * HyperSort - A revolutionary sorting algorithm
