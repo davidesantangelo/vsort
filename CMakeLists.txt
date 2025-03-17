@@ -1,10 +1,12 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(vsort 
-    VERSION 0.2.0
+    VERSION 0.2.1
     DESCRIPTION "High-Performance Sorting Algorithm for Apple Silicon"
     LANGUAGES C
 )
+
+set(CMAKE_C_STANDARD 11)
 
 # Check for Apple Silicon
 if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
@@ -43,6 +45,42 @@ if(OpenMP_C_FOUND)
     target_link_libraries(vsort PUBLIC OpenMP::OpenMP_C)
 else()
     message(STATUS "OpenMP not available, parallel features disabled")
+endif()
+
+# Platform-specific settings
+if(MSVC)
+    # MSVC (Visual Studio) compiler flags
+    target_compile_options(vsort PRIVATE 
+        /O2             # Optimize for speed
+        /Ob2            # Inline function expansion
+        /Oi             # Enable intrinsic functions
+        /Ot             # Favor fast code
+        /Gy             # Function-level linking
+        /fp:fast        # Fast floating point model
+    )
+elseif(APPLE)
+    # macOS specific flags for Apple Silicon
+    target_compile_options(vsort PRIVATE 
+        -O3
+        -ffast-math
+        -ftree-vectorize
+        -funroll-loops
+        -march=native
+    )
+    
+    # Check for ARM architecture (Apple Silicon)
+    execute_process(COMMAND uname -m OUTPUT_VARIABLE ARCH OUTPUT_STRIP_TRAILING_WHITESPACE)
+    if(ARCH MATCHES "arm64")
+        target_compile_options(vsort PRIVATE -mcpu=apple-a14)
+    endif()
+else()
+    # Generic GCC/Clang flags for other platforms
+    target_compile_options(vsort PRIVATE 
+        -O3
+        -ffast-math
+        -ftree-vectorize
+        -funroll-loops
+    )
 endif()
 
 # Platform-specific settings
@@ -101,3 +139,9 @@ install(TARGETS vsort
 )
 
 install(FILES vsort.h DESTINATION include)
+
+# Testing
+enable_testing()
+add_executable(vsort_test test.c)
+target_link_libraries(vsort_test vsort)
+add_test(NAME vsort_test COMMAND vsort_test)

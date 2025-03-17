@@ -13,7 +13,23 @@
 #include <string.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <unistd.h> // Add this for sysconf and _SC_NPROCESSORS_PHYS
+#include <time.h>
+
+// Platform-specific includes
+#if defined(_WIN32) || defined(_MSC_VER)
+// Windows-specific headers
+#include <windows.h>
+#define sysconf(x) 0
+#define _SC_NPROCESSORS_ONLN 0
+// Windows sleep function (milliseconds)
+#define sleep(x) Sleep((x) * 1000)
+#else
+// Unix/POSIX headers
+#include <unistd.h>
+#if defined(__APPLE__)
+#include <dispatch/dispatch.h>
+#endif
+#endif
 
 // Helper macro for min value - add this before it's used
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -200,7 +216,9 @@ bool vsort_is_nearly_sorted(int *arr, int size)
 // Get physical core count for optimal thread distribution
 static int get_physical_core_count(void)
 {
-#if defined(__APPLE__)
+#if defined(_WIN32) || defined(_MSC_VER)
+    return get_num_processors();
+#elif defined(__APPLE__)
     // Use _SC_NPROCESSORS_ONLN which is more widely supported
     return (int)sysconf(_SC_NPROCESSORS_ONLN);
 #elif defined(_SC_NPROCESSORS_CONF)
@@ -458,3 +476,20 @@ static int default_char_comparator(const void *a, const void *b)
 {
     return (*(const char *)a - *(const char *)b);
 }
+
+// For Windows, provide implementations for any missing functions
+#if defined(_WIN32) || defined(_MSC_VER)
+// Get number of processors on Windows
+int get_num_processors()
+{
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return sysinfo.dwNumberOfProcessors;
+}
+#else
+// Unix version
+int get_num_processors()
+{
+    return (int)sysconf(_SC_NPROCESSORS_ONLN);
+}
+#endif

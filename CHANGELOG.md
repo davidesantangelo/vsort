@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2025-03-24
+## [0.2.1] - 2025-03-17
+
+### Fixed
+- Cross-platform compatibility with Windows systems
+- Memory allocation handling in parallel sorting algorithm
+- Build system improvements for cross-platform compilation
+- CMake configuration for Visual Studio compiler flags
+
+### Improved
+- Error handling in quicksort algorithm
+- Thread allocation for platforms without Grand Central Dispatch
+- Cache utilization in sorting algorithm
+- Documentation for Windows compatibility
+
+## [0.2.0] - 2025-03-17
 
 ### Added
 - Enhanced NEON vectorization for parallel processing
