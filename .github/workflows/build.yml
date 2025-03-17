@@ -68,13 +68,13 @@ jobs:
       if: runner.os == 'Windows'
       shell: pwsh
       run: |
-        $content = @"
+        $content = @'
         cmake_minimum_required(VERSION 3.14)
         project(vsort C)
 
         # Set version
         set(VSORT_VERSION "0.2.1")
-        add_definitions(-DVSORT_VERSION="\\"${VSORT_VERSION}\\"")
+        add_definitions(-DVSORT_VERSION="${VSORT_VERSION}")
         add_definitions(-D_CRT_SECURE_NO_WARNINGS)
 
         # Add optimization flags
@@ -82,7 +82,7 @@ jobs:
 
         # Create static library
         add_library(vsort STATIC vsort.c)
-        target_include_directories(vsort PUBLIC \${CMAKE_CURRENT_SOURCE_DIR})
+        target_include_directories(vsort PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
         # Example executable
         add_executable(basic_example examples/basic_example.c)
@@ -91,7 +91,7 @@ jobs:
         # Setup tests
         enable_testing()
         add_test(NAME basic_example COMMAND basic_example)
-        "@
+        '@
         
         # Back up the original CMakeLists.txt
         Rename-Item -Path "${{ github.workspace }}/CMakeLists.txt" -NewName "CMakeLists.txt.bak" -Force
