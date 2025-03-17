@@ -22,13 +22,6 @@ if(WIN32)
     # Export symbols properly for DLL
     target_compile_definitions(vsort PRIVATE VSORT_EXPORTS)
     target_compile_definitions(vsort PRIVATE _CRT_SECURE_NO_WARNINGS)
-    
-    # Add runtime library options needed for MSVC
-    set_target_properties(vsort PROPERTIES 
-        WINDOWS_EXPORT_ALL_SYMBOLS ON
-        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
-        ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib
-    )
 else()
     # Create a static library on other platforms
     add_library(vsort STATIC vsort.c)
@@ -62,10 +55,7 @@ if(MSVC)
         /Ot             # Favor fast code
         /Gy             # Function-level linking
         /fp:fast        # Fast floating point model
-        /GL             # Whole program optimization
     )
-    # Add LTCG (Link Time Code Generation) for better optimization
-    set_target_properties(vsort PROPERTIES LINK_FLAGS "/LTCG")
 elseif(APPLE)
     # macOS specific flags for Apple Silicon
     target_compile_options(vsort PRIVATE 
@@ -122,11 +112,8 @@ foreach(example ${EXAMPLES})
         target_compile_options(${example} PRIVATE 
             /O2             # Optimize for speed
             /fp:fast        # Fast floating point model
-            /GL             # Whole program optimization
         )
         target_compile_definitions(${example} PRIVATE _CRT_SECURE_NO_WARNINGS)
-        # Add LTCG for examples to avoid warnings
-        set_target_properties(${example} PROPERTIES LINK_FLAGS "/LTCG")
     endif()
 endforeach()
 
@@ -151,11 +138,8 @@ foreach(test ${TESTS})
         target_compile_options(${test} PRIVATE 
             /O2             # Optimize for speed
             /fp:fast        # Fast floating point model
-            /GL             # Whole program optimization
         )
         target_compile_definitions(${test} PRIVATE _CRT_SECURE_NO_WARNINGS)
-        # Add LTCG for tests to avoid warnings
-        set_target_properties(${test} PROPERTIES LINK_FLAGS "/LTCG")
     endif()
 endforeach()
 
