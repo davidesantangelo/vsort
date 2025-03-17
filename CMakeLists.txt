@@ -140,8 +140,10 @@ install(TARGETS vsort
 
 install(FILES vsort.h DESTINATION include)
 
-# Testing
+# Enable testing for the existing test targets
 enable_testing()
-add_executable(vsort_test test.c)
-target_link_libraries(vsort_test vsort)
-add_test(NAME vsort_test COMMAND vsort_test)
+
+# Register existing tests with CTest
+foreach(test ${TESTS})
+    add_test(NAME ${test} COMMAND ${test})
+endforeach()
