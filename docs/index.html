@@ -1,0 +1,2126 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VSort • Apple Silicon</title>
+    <style>
+        /* Core variables */
+        :root {
+            --accent: #0071e3;
+            --text-primary: #1d1d1f;
+            --text-secondary: #86868b;
+            --background: #ffffff;
+            --card-bg: #f5f5f7;
+            --code-bg: #fafafa;
+            --border: #e8e8ed;
+        }
+
+        /* Base styles */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'SF Pro Display', system-ui, sans-serif;
+            background-color: var(--background);
+            color: var(--text-primary);
+            line-height: 1.5;
+            letter-spacing: -0.01em;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: 56px;
+            font-weight: 700;
+            letter-spacing: -0.03em;
+            line-height: 1;
+            margin-bottom: 24px;
+        }
+
+        h2 {
+            font-size: 36px;
+            font-weight: 600;
+            letter-spacing: -0.02em;
+            line-height: 1.2;
+            margin-bottom: 32px;
+            text-align: center;
+        }
+
+        h3 {
+            font-size: 21px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            line-height: 1.3;
+            margin-bottom: 16px;
+        }
+
+        p {
+            color: var(--text-secondary);
+            font-size: 17px;
+            line-height: 1.6;
+        }
+
+        /* Layout elements */
+        header {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: left;
+            overflow: hidden;
+            padding: 0;
+            background: linear-gradient(135deg, rgba(0, 113, 227, 0.03) 0%, rgba(52, 199, 89, 0.03) 100%);
+        }
+
+        /* Fixed styles for better visibility in the hero section */
+        .hero-container {
+            display: grid;
+            grid-template-columns: 1.2fr 0.8fr;
+            gap: 60px;
+            /* Increased from 40px for better separation */
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            padding: 40px 0;
+            /* Added padding for better spacing */
+        }
+
+        .hero-content {
+            padding-right: 40px;
+        }
+
+        .hero-subtitle {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--accent);
+            margin-bottom: 20px;
+            display: inline-block;
+            position: relative;
+            padding-left: 40px;
+        }
+
+        .hero-subtitle::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 2px;
+            background: var(--accent);
+        }
+
+        .hero-title {
+            font-size: 80px;
+            font-weight: 800;
+            margin-bottom: 30px;
+            line-height: 1;
+            background: linear-gradient(135deg, var(--text-primary) 30%, #bebebe);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            position: relative;
+        }
+
+        .hero-title span {
+            display: block;
+            font-size: 0.4em;
+            font-weight: 600;
+            background: linear-gradient(90deg, var(--accent), #34c759);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-top: 10px;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .hero-description {
+            font-size: 20px;
+            line-height: 1.6;
+            max-width: 550px;
+            margin-bottom: 40px;
+            color: var(--text-secondary);
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 16px;
+        }
+
+        .hero-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px 32px;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero-btn.primary {
+            background: var(--accent);
+            color: white;
+            box-shadow: 0 10px 20px rgba(0, 113, 227, 0.2);
+        }
+
+        .hero-btn.secondary {
+            background: transparent;
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+        }
+
+        .hero-btn.primary:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px rgba(0, 113, 227, 0.3);
+        }
+
+        .hero-btn.secondary:hover {
+            background: var(--card-bg);
+            border-color: transparent;
+        }
+
+        .hero-btn svg {
+            margin-right: 10px;
+            width: 20px;
+            height: 20px;
+        }
+
+        .hero-visual {
+            position: relative;
+            height: 500px;
+        }
+
+        .sort-visualization {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: var(--card-bg);
+            border-radius: 30px;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            /* Reduced shadow intensity */
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 40px 20px;
+            /* Added horizontal padding */
+            margin-top: 20px;
+            /* Added margin to push down from top */
+        }
+
+        .sort-visualization-title {
+            z-index: 100;
+        }
+
+        .sort-bars {
+            display: flex;
+            align-items: flex-end;
+            width: 100%;
+            height: 100%;
+            position: relative;
+            gap: 5px;
+        }
+
+        .sort-bar {
+            flex: 1;
+            background: var(--accent);
+            border-radius: 4px 4px 0 0;
+            transition: height 0.5s ease;
+        }
+
+        .sort-bar:nth-child(4n+1) {
+            background: var(--accent);
+        }
+
+        .sort-bar:nth-child(4n+2) {
+            background: #34c759;
+        }
+
+        .sort-bar:nth-child(4n+3) {
+            background: #ff9500;
+        }
+
+        .sort-bar:nth-child(4n+4) {
+            background: #ff2d55;
+        }
+
+        .visual-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 12px;
+            /* Increased for better touch targets */
+            z-index: 10;
+        }
+
+        .visual-btn {
+            background: rgba(255, 255, 255, 0.9);
+            /* Increased opacity for better visibility */
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            /* Slightly larger */
+            height: 44px;
+            /* Slightly larger */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            /* Added subtle shadow */
+        }
+
+        .visual-btn:hover {
+            background: white;
+            transform: scale(1.1);
+        }
+
+        .visual-btn svg {
+            width: 20px;
+            height: 20px;
+            color: var(--text-primary);
+        }
+
+        /* Fix for the floating chip visibility and Live Visualization text display */
+        .floating-chip {
+            position: absolute;
+            top: -30px;
+            /* Moved higher to prevent cutting off */
+            right: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 20px;
+            /* Increased padding for better text display */
+            border-radius: 20px;
+            font-size: 15px;
+            font-weight: 600;
+            color: var (--accent);
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            /* Increased gap between icon and text */
+            z-index: 20;
+            border: 1px solid rgba(0, 113, 227, 0.1);
+            white-space: nowrap;
+            /* Prevent text wrapping */
+            transform: translateY(-5px);
+            /* Shift upward slightly */
+        }
+
+        .floating-chip svg {
+            width: 16px;
+            height: 16px;
+            flex-shrink: 0;
+            /* Prevent the icon from shrinking */
+        }
+
+        .bg-shapes {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            z-index: 0;
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .bg-shape {
+            position: absolute;
+            border-radius: 50%;
+        }
+
+        .bg-shape-1 {
+            width: 300px;
+            height: 300px;
+            left: -100px;
+            top: 10%;
+            background: linear-gradient(135deg, rgba(0, 113, 227, 0.1), transparent);
+            animation: float1 20s infinite alternate ease-in-out;
+        }
+
+        .bg-shape-2 {
+            width: 200px;
+            height: 200px;
+            right: 10%;
+            bottom: 10%;
+            background: linear-gradient(135deg, rgba(52, 199, 89, 0.1), transparent);
+            animation: float2 15s infinite alternate-reverse ease-in-out;
+        }
+
+        .bg-shape-3 {
+            width: 150px;
+            height: 150px;
+            right: 30%;
+            top: 15%;
+            opacity: 0.4;
+            /* Reduced opacity */
+            background: linear-gradient(135deg, rgba(255, 149, 0, 0.1), transparent);
+            animation: float3 25s infinite alternate ease-in-out;
+        }
+
+        @keyframes float1 {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(50px, 30px) rotate(10deg);
+            }
+        }
+
+        @keyframes float2 {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(-30px, -50px) rotate(-5deg);
+            }
+        }
+
+        @keyframes float3 {
+            0% {
+                transform: translate(0, 0);
+            }
+
+            100% {
+                transform: translate(20px, -40px) rotate(15deg);
+            }
+        }
+
+        @media (max-width: 1024px) {
+            .hero-container {
+                grid-template-columns: 1fr;
+                gap: 40px;
+            }
+
+            .hero-content {
+                padding-right: 0;
+                text-align: center;
+                order: 1;
+            }
+
+            .hero-visual {
+                order: 0;
+                height: 350px;
+                margin: 20px auto;
+                /* Added vertical margin */
+                max-width: 600px;
+            }
+
+            .hero-subtitle {
+                padding-left: 0;
+            }
+
+            .hero-subtitle::before {
+                display: none;
+            }
+
+            .hero-title {
+                font-size: 60px;
+            }
+
+            .hero-description {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .hero-buttons {
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 120px 0 80px;
+            }
+
+            .hero-title {
+                font-size: 40px;
+            }
+
+            .hero-visual {
+                height: 280px;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+                max-width: 280px;
+                margin: 0 auto;
+                width: 100%;
+            }
+        }
+
+        /* Features section */
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 40px;
+            margin-top: 24px;
+        }
+
+        .feature-card {
+            padding: 40px 24px;
+            border-radius: 16px;
+            transition: transform 0.3s ease;
+        }
+
+        .feature-icon {
+            width: 32px;
+            height: 32px;
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        /* Performance section */
+        .performance-container {
+            max-width: 900px;
+            /* Increased from 800px */
+            margin: 0 auto;
+            text-align: center;
+        }
+
+        .chart {
+            height: 400px;
+            position: relative;
+            margin: 40px 0 80px;
+            transition: all 0.5s ease;
+            overflow-x: hidden;
+            /* Prevent horizontal overflow */
+        }
+
+        .algorithm-group {
+            position: absolute;
+            bottom: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .bars-container {
+            display: flex;
+            gap: 10px;
+            height: 300px;
+            align-items: flex-end;
+        }
+
+        .bar-wrap {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 60px;
+        }
+
+        .chart-bar {
+            width: 100%;
+            background: var(--accent);
+            transition: height 1s ease;
+            border-radius: 4px 4px 0 0;
+        }
+
+        .chart-bar.nearly-sorted {
+            background: #34c759;
+        }
+
+        .bar-value {
+            padding: 4px 0;
+            font-weight: 500;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .algorithm-name {
+            margin-top: 16px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .chart-legend {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 24px;
+            margin: 30px auto;
+            max-width: 600px;
+            padding: 16px;
+            background: var(--card-bg);
+            border-radius: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 500;
+        }
+
+        .legend-color {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 4px;
+        }
+
+        .benchmark-card {
+            background: var(--background);
+            padding: 40px 20px;
+            /* Reduce horizontal padding on smaller screens */
+            border-radius: 16px;
+            margin-top: 60px;
+            text-align: left;
+            overflow-x: auto;
+            /* Allow horizontal scrolling for table */
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        table th,
+        table td {
+            text-align: left;
+            padding: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table th {
+            font-weight: 500;
+            color: var (--text-secondary);
+        }
+
+        /* Installation */
+        .steps {
+            max-width: 900px;
+            /* Increased from 700px */
+            margin: 40px auto 0;
+        }
+
+        .step {
+            display: flex;
+            margin-bottom: 48px;
+        }
+
+        .step-number {
+            flex-shrink: 0;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 24px;
+            margin-top: 4px;
+        }
+
+        .step-content {
+            flex: 1;
+        }
+
+        .code {
+            background: var(--code-bg);
+            border-radius: 8px;
+            padding: 24px;
+            margin: 20px 0;
+            position: relative;
+            font-family: 'SF Mono', Menlo, monospace;
+            font-size: 14px;
+            overflow-x: auto;
+            border: 1px solid var(--border);
+            line-height: 1.6;
+        }
+
+        .code pre {
+            margin: 0;
+            white-space: pre-wrap;
+        }
+
+        .copy-btn {
+            position: absolute;
+            right: 12px;
+            top: 12px;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: 4px 10px;
+            font-size: 12px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .copy-btn:hover {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        /* Footer */
+        footer {
+            position: relative;
+            padding: 0;
+            overflow: hidden;
+            border-top: none;
+            margin-top: 60px;
+        }
+
+        .footer-wave {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 60px;
+            background: linear-gradient(90deg, var(--accent) -10%, transparent 40%);
+            clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 0%);
+            z-index: 1;
+        }
+
+        .footer-container {
+            position: relative;
+            background-color: var(--card-bg);
+            padding: 60px 0 20px;
+        }
+
+        .footer-content {
+            position: relative;
+            z-index: 2;
+            display: grid;
+            grid-template-columns: 2fr 1fr auto;
+            gap: 40px;
+            align-items: start;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .footer-brand {
+            position: relative;
+        }
+
+        .footer-logo {
+            font-size: 42px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent) 0%, #34c759 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            line-height: 1;
+            margin-bottom: 16px;
+            position: relative;
+            white-space: nowrap;
+        }
+
+        .footer-tagline {
+            color: var(--text-secondary);
+            font-size: 15px;
+            margin-top: -5px;
+            padding-left: 3px;
+        }
+
+        .footer-author {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: center;
+            padding-left: 20px;
+            border-left: 1px solid var(--border);
+        }
+
+        .author-label {
+            font-size: 14px;
+            color: var(--text-secondary);
+            margin-bottom: 5px;
+        }
+
+        .author-name {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            position: relative;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            padding-bottom: 2px;
+            display: inline-block;
+        }
+
+        .author-name:hover {
+            color: var(--accent);
+        }
+
+        .author-name::after {
+            content: '';
+            position: absolute;
+            height: 2px;
+            width: 0;
+            bottom: 0;
+            left: 0;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            transition: width 0.3s ease;
+        }
+
+        .author-name:hover::after {
+            width: 100%;
+        }
+
+        .footer-github {
+            background: var(--background);
+            width: 54px;
+            height: 54px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .footer-github::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--accent) 0%, #34c759 100%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            z-index: 0;
+        }
+
+        .footer-github:hover {
+            transform: translateY(-4px) rotate(8deg);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+        }
+
+        .footer-github:hover::before {
+            opacity: 1;
+        }
+
+        .footer-github:hover svg {
+            color: white;
+        }
+
+        .footer-github svg {
+            width: 28px;
+            height: 28px;
+            color: var(--text-secondary);
+            position: relative;
+            z-index: 1;
+            transition: color 0.3s ease;
+        }
+
+        .footer-sorting-animation {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            overflow: hidden;
+            opacity: 0.7;
+        }
+
+        .footer-bars {
+            display: flex;
+            width: 100%;
+            height: 100%;
+        }
+
+        .footer-bar {
+            height: 100%;
+            flex: 1;
+            background-color: var(--accent);
+            transform: scaleY(0);
+            transform-origin: bottom;
+            animation: sortAnimation 3s infinite;
+        }
+
+        @keyframes sortAnimation {
+            0% {
+                transform: scaleY(0.2);
+            }
+
+            50% {
+                transform: scaleY(1);
+            }
+
+            100% {
+                transform: scaleY(0.2);
+            }
+        }
+
+        /* Create staggered animation for sorting bars */
+        .footer-bar:nth-child(2n) {
+            animation-delay: 0.2s;
+            background-color: #34c759;
+        }
+
+        .footer-bar:nth-child(3n) {
+            animation-delay: 0.4s;
+            background-color: #ff9500;
+        }
+
+        .footer-bar:nth-child(4n) {
+            animation-delay: 0.6s;
+            background-color: #ff3b30;
+        }
+
+        @media (max-width: 768px) {
+            .footer-content {
+                grid-template-columns: 1fr;
+                gap: 30px;
+                padding: 0 24px;
+                text-align: center;
+            }
+
+            .footer-author {
+                border-left: none;
+                border-top: 1px solid var(--border);
+                padding: 20px 0 0 0;
+                align-items: center;
+            }
+
+            .footer-github {
+                margin: 0 auto;
+            }
+
+            .footer-wave {
+                height: 40px;
+            }
+        }
+
+        @media (max-width: 768px) {
+            header {
+                padding: 100px 0 80px;
+            }
+
+            h1 {
+                font-size: 42px;
+            }
+
+            h2 {
+                font-size: 28px;
+            }
+
+            .tagline {
+                font-size: 20px;
+            }
+
+            .buttons {
+                flex-direction: column;
+                align-items: center;
+                gap: 12px;
+            }
+
+            .button {
+                width: 100%;
+                max-width: 280px;
+            }
+        }
+
+        /* Updated chart and benchmark styles */
+        .algorithm-bar {
+            position: absolute;
+            bottom: 0;
+            border-radius: 6px 6px 0 0;
+            transition: height 1s ease, left 0.5s ease;
+            min-width: 20px;
+            /* Ensure bars have minimum width */
+        }
+
+        .bar-label {
+            position: absolute;
+            top: -24px;
+            left: 50%;
+            transform: translateX(-50%);
+            white-space: nowrap;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .tabs-container {
+            margin: 40px 0 10px;
+        }
+
+        .tabs {
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            background: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 500;
+            color: var(--text-primary);
+            /* Ensure text is visible */
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .tab-btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var (--accent);
+        }
+
+        @media (max-width: 768px) {
+            .tabs {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .tab-btn {
+                width: 100%;
+                max-width: 280px;
+            }
+        }
+
+        /* Improved section alignment and emphasis styles */
+        section .container {
+            padding: 0 24px;
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+
+        .apple-silicon {
+            color: var(--accent);
+            font-weight: 600;
+            position: relative;
+            display: inline-block;
+        }
+
+        .apple-silicon::after {
+            content: "";
+            position: absolute;
+            bottom: -2px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background-color: var(--accent);
+            opacity: 0.5;
+        }
+
+        .subtitle {
+            text-align: center;
+            font-size: 17px;
+            color: var(--text-secondary);
+            margin: 0 auto 10px;
+            max-width: 700px;
+        }
+
+        .hardware-spec {
+            display: inline-block;
+            font-weight: 500;
+            font-size: 14px;
+            margin: 0px auto;
+            color: var(--text-primary);
+        }
+
+        /* Revolutionary new Key Features styles */
+        .features-section {
+            position: relative;
+            overflow: hidden;
+            padding: 120px 0 100px;
+        }
+
+        .features-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent));
+        }
+
+        .features-heading {
+            position: relative;
+            font-size: 42px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 80px;
+        }
+
+        .features-heading::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            margin: 20px auto 0;
+            border-radius: 2px;
+        }
+
+        .features-container {
+            display: flex;
+            position: relative;
+            flex-direction: column;
+            gap: 140px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .feature-item {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            align-items: center;
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .feature-item:nth-child(even) {
+            grid-template-columns: 1fr 1fr;
+            direction: rtl;
+        }
+
+        .feature-item:nth-child(even) .feature-content {
+            direction: ltr;
+        }
+
+        .feature-visual {
+            position: relative;
+        }
+
+        .feature-icon-container {
+            width: 120px;
+            height: 120px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0px 20px 40px rgba(0, 0, 0, 0.08);
+            position: relative;
+            z-index: 1;
+            overflow: hidden;
+        }
+
+        .feature-icon-container::before {
+            content: '';
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, var(--accent), transparent);
+            opacity: 0.08;
+            z-index: -1;
+        }
+
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            color: var(--accent);
+            transition: all 0.3s ease;
+        }
+
+        .feature-visual:hover .feature-icon {
+            transform: scale(1.1) rotate(-5deg);
+        }
+
+        .feature-bg-circle {
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(0, 113, 227, 0.05) 0%, rgba(52, 199, 89, 0.05) 100%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 0;
+        }
+
+        .feature-content {
+            position: relative;
+        }
+
+        .feature-title {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 20px;
+            background: linear-gradient(90deg, var(--text-primary) 70%, transparent);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .feature-desc {
+            font-size: 17px;
+            line-height: 1.6;
+            color: var(--text-secondary);
+            max-width: 400px;
+        }
+
+        .feature-number {
+            position: absolute;
+            right: 0;
+            bottom: -20px;
+            font-size: 120px;
+            font-weight: 800;
+            color: rgba(0, 113, 227, 0.03);
+            z-index: -1;
+        }
+
+        .feature-item:nth-child(even) .feature-number {
+            left: 0;
+            right: auto;
+        }
+
+        /* Path animation */
+        .feature-path {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 2px;
+            height: 100px;
+            background: linear-gradient(to bottom, var(--accent), transparent);
+            z-index: 0;
+        }
+
+        .feature-path::before,
+        .feature-path::after {
+            content: '';
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--accent);
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0.7;
+        }
+
+        .feature-path::before {
+            top: 20px;
+            animation: pulseDown 2s infinite;
+        }
+
+        .feature-path::after {
+            bottom: 20px;
+            animation: pulseUp 2s infinite;
+        }
+
+        @keyframes pulseDown {
+            0% {
+                transform: translateX(-50%) translateY(0);
+                opacity: 0.7;
+            }
+
+            50% {
+                transform: translateX(-50%) translateY(30px);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translateX(-50%) translateY(0);
+                opacity: 0.7;
+            }
+        }
+
+        @keyframes pulseUp {
+            0% {
+                transform: translateX(-50%) translateY(0);
+                opacity: 0.7;
+            }
+
+            50% {
+                transform: translateX(-50%) translateY(-30px);
+                opacity: 0;
+            }
+
+            100% {
+                transform: translateX(-50%) translateY(0);
+                opacity: 0.7;
+            }
+        }
+
+        @media (max-width: 900px) {
+
+            .feature-item,
+            .feature-item:nth-child(even) {
+                grid-template-columns: 1fr;
+                direction: ltr;
+                gap: 30px;
+            }
+
+            .feature-content {
+                text-align: center;
+            }
+
+            .feature-desc {
+                max-width: 100%;
+            }
+
+            .feature-number {
+                display: none;
+            }
+
+            .features-container {
+                gap: 100px;
+            }
+
+            .feature-path {
+                height: 60px;
+            }
+        }
+
+        /* Consistent section styling for Performance and Installation */
+        .performance-section,
+        .installation-section {
+            position: relative;
+            overflow: hidden;
+            padding: 120px 0 100px;
+            background-color: var(--background);
+        }
+
+        .performance-section::before,
+        .installation-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 50%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--accent));
+        }
+
+        .section-heading {
+            position: relative;
+            font-size: 42px;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 60px;
+        }
+
+        .section-heading::after {
+            content: '';
+            display: block;
+            width: 100px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--accent), transparent);
+            margin: 20px auto 0;
+            border-radius: 2px;
+        }
+
+        .performance-section {
+            background-color: var(--card-bg);
+        }
+
+        /* Adjust spacing between sections */
+        .installation-section {
+            margin-top: 0;
+        }
+
+        /* Ensure all sections have proper spacing */
+        section:not(.features-section):not(.performance-section):not(.installation-section) {
+            padding: 80px 0;
+        }
+
+        /* Improved tablet and mobile styles */
+        @media (max-width: 1024px) {
+            .section-heading {
+                font-size: 36px;
+            }
+
+            .chart {
+                height: 350px;
+                /* Reduced height on tablets */
+                margin: 30px 0 60px;
+            }
+
+            .performance-container,
+            .steps {
+                max-width: 95%;
+                /* Take more screen width */
+            }
+        }
+
+        @media (max-width: 768px) {
+            .chart {
+                height: 300px;
+                /* Further reduced height on mobile */
+                margin: 20px 0 40px;
+            }
+
+            .benchmark-card {
+                padding: 20px 10px;
+                margin-top: 30px;
+            }
+
+            .tabs {
+                flex-wrap: wrap;
+                /* Allow tabs to wrap on narrow screens */
+            }
+
+            .tab-btn {
+                flex: 1;
+                min-width: 120px;
+                padding: 10px;
+                font-size: 14px;
+            }
+
+            .feature-item,
+            .feature-item:nth-child(even) {
+                gap: 20px;
+                /* Reduce spacing on mobile */
+            }
+
+            .feature-icon-container {
+                width: 90px;
+                /* Smaller feature icons on mobile */
+                height: 90px;
+            }
+
+            .hero-container {
+                padding: 20px 0;
+            }
+        }
+
+        /* Additional mobile optimizations to hide hero-visual and fix performance chart */
+
+        /* Hide visualization on small mobile screens */
+        @media (max-width: 576px) {
+            .hero-visual {
+                display: none;
+                /* Hide visual completely on small screens */
+            }
+
+            .hero-container {
+                grid-template-columns: 1fr;
+                gap: 20px;
+            }
+
+            .hero-content {
+                padding-right: 0;
+            }
+        }
+
+        /* Better responsive styles for algorithm chart bars */
+        .benchmark-card table {
+            width: 100%;
+            min-width: 600px;
+            /* Ensure minimum width for table */
+        }
+
+        /* Improved chart rendering for mobile */
+        @media (max-width: 768px) {
+            .chart {
+                height: 260px;
+                /* Reduced height on mobile */
+                overflow-x: auto;
+                /* Allow horizontal scrolling if necessary */
+            }
+
+            /* Force minimum width for the chart labels to prevent overlap */
+            .algorithm-name {
+                font-size: 14px;
+                white-space: nowrap;
+            }
+
+            .bar-label {
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="bg-shapes">
+            <div class="bg-shape bg-shape-1"></div>
+            <div class="bg-shape bg-shape-2"></div>
+            <div class="bg-shape bg-shape-3"></div>
+        </div>
+
+        <div class="container">
+            <div class="hero-container">
+                <div class="hero-content">
+                    <div class="hero-subtitle">Optimized for performance</div>
+                    <h1 class="hero-title">VSort <span>for Apple Silicon</span></h1>
+                    <p class="hero-description">
+                        A high-performance sorting algorithm leveraging NEON vectorization and Grand Central Dispatch to
+                        deliver unparalleled speed on Apple Silicon hardware.
+                    </p>
+                    <div class="hero-buttons">
+                        <a href="https://github.com/davidesantangelo/vsort" class="hero-btn primary">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path fill-rule="evenodd" clip-rule="evenodd"
+                                    d="M12 0C5.37 0 0 5.37 0 12C0 17.31 3.435 21.795 8.205 23.385C8.805 23.49 9.03 23.13 9.03 22.815C9.03 22.53 9.015 21.585 9.015 20.58C5.68 21.285 4.965 18.975 4.965 18.975C4.4175 17.5875 3.63 17.235 3.63 17.235C2.5425 16.5 3.72 16.5 3.72 16.5C4.92 16.605 5.55 17.73 5.55 17.73C6.6 19.5375 8.3175 19.0125 9.075 18.7875C9.18 18 9.495 17.4675 9.84 17.175C7.17 16.8825 4.38 15.87 4.38 11.25C4.38 9.975 4.845 8.9175 5.565 8.0775C5.445 7.785 5.025 6.5625 5.685 4.95C5.685 4.95 6.6825 4.6275 9.03 6.1725C9.9825 5.9025 11.01 5.7675 12.03 5.7675C13.05 5.7675 14.0775 5.9025 15.03 6.1725C17.3775 4.6275 18.375 4.95 18.375 4.95C19.035 6.5625 18.615 7.785 18.495 8.0775C19.215 8.9175 19.68 9.975 19.68 11.25C19.68 15.885 16.875 16.8675 14.19 17.16C14.64 17.535 15.03 18.2625 15.03 19.3875C15.03 21 15.015 22.38 15.015 22.815C15.015 23.13 15.24 23.49 15.855 23.385C20.565 21.7875 24 17.3175 24 12C24 5.37 18.63 0 12 0Z"
+                                    fill="currentColor" />
+                            </svg>
+                            View on GitHub
+                        </a>
+                        <button class="hero-btn secondary" id="demo-btn">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22Z"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path d="M10 8L16 12L10 16V8Z" stroke="currentColor" stroke-width="2"
+                                    stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            See it in action
+                        </button>
+                    </div>
+                </div>
+
+                <div class="hero-visual">
+                    <div class="sort-visualization">
+                        <div class="sort-bars" id="sort-bars">
+                            <!-- Will be populated by JavaScript -->
+                        </div>
+
+                        <div class="visual-controls">
+                            <button class="visual-btn" id="shuffle-btn">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path
+                                        d="M21 16V20H17M21 8V4H17M3 8V4H7M3 16V20H7M16 3H8C5.79086 3 4 4.79086 4 7V17C4 19.2091 5.79086 21 8 21H16C18.2091 21 20 19.2091 20 17V7C20 4.79086 18.2091 3 16 3Z"
+                                        stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                        stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                            <button class="visual-btn" id="sort-btn">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none"
+                                    xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M5 7H19M5 12H15M5 17H11" stroke="currentColor" stroke-width="2"
+                                        stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <section class="features-section">
+        <div class="container">
+            <h2 class="features-heading">Key Features</h2>
+
+            <div class="features-container">
+                <div class="feature-item">
+                    <div class="feature-visual">
+                        <div class="feature-bg-circle"></div>
+                        <div class="feature-icon-container">
+                            <svg class="feature-icon" viewBox="0 0 24 24" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path d="M13 13H21M13 13V21M13 13L21 21M11 3H3M11 3V11M11 3L3 11" stroke="currentColor"
+                                    stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="feature-content">
+                        <h3 class="feature-title">NEON Vectorization</h3>
+                        <p class="feature-desc">Processes multiple elements simultaneously using 128-bit vector
+                            registers, maximizing throughput and minimizing cycle time per element on Apple Silicon
+                            processors.</p>
+                        <div class="feature-number">01</div>
+                    </div>
+                </div>
+
+                <div class="feature-path"></div>
+
+                <div class="feature-item">
+                    <div class="feature-visual">
+                        <div class="feature-bg-circle"></div>
+                        <div class="feature-icon-container">
+                            <svg class="feature-icon" viewBox="0 0 24 24" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M22 12C22 17.5228 17.5228 22 12 22M22 12C22 6.47715 17.5228 2 12 2M22 12H18M12 22C6.47715 22 2 17.5228 2 12M12 22V18M2 12C2 6.47715 6.47715 2 12 2M2 12H6M12 2V6"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="feature-content">
+                        <h3 class="feature-title">Grand Central Dispatch</h3>
+                        <p class="feature-desc">Efficiently balances workloads across all available CPU cores,
+                            dynamically adjusting thread allocation based on current system load and data
+                            characteristics.</p>
+                        <div class="feature-number">02</div>
+                    </div>
+                </div>
+
+                <div class="feature-path"></div>
+
+                <div class="feature-item">
+                    <div class="feature-visual">
+                        <div class="feature-bg-circle"></div>
+                        <div class="feature-icon-container">
+                            <svg class="feature-icon" viewBox="0 0 24 24" fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path d="M20 5H4M20 5V19M20 5L15 10M4 5V19M4 5L9 10M20 19H4M20 19L15 14M4 19L9 14"
+                                    stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="feature-content">
+                        <h3 class="feature-title">Adaptive Algorithm</h3>
+                        <p class="feature-desc">Selects optimal sorting strategies based on input characteristics,
+                            seamlessly switching between algorithms to maximize performance for any data pattern or
+                            distribution.</p>
+                        <div class="feature-number">03</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="performance-section">
+        <div class="container">
+            <h2 class="section-heading">Performance</h2>
+            <div class="performance-container">
+                <p class="subtitle">Benchmark results comparing vsort against standard algorithms across
+                    different array sizes</p>
+                <div class="hardware-spec">
+                    Tested on Mac Mini M4 with 24GB RAM
+                </div>
+
+                <div class="chart-legend">
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: var(--accent);"></span>
+                        <span>vsort</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #34c759;"></span>
+                        <span>quicksort</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ff9500;"></span>
+                        <span>mergesort</span>
+                    </div>
+                    <div class="legend-item">
+                        <span class="legend-color" style="background-color: #ff3b30;"></span>
+                        <span>std::qsort</span>
+                    </div>
+                </div>
+
+                <div class="tabs-container">
+                    <div class="tabs">
+                        <button class="tab-btn active" data-size="10000">10,000 elements</button>
+                        <button class="tab-btn" data-size="100000">100,000 elements</button>
+                        <button class="tab-btn" data-size="1000000">1,000,000 elements</button>
+                    </div>
+                </div>
+
+                <div class="chart" id="performance-chart">
+                    <!-- Will be populated by JavaScript -->
+                </div>
+
+                <div class="benchmark-card">
+                    <h3>Benchmark Results</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Size</th>
+                                <th>vsort (ms)</th>
+                                <th>quicksort (ms)</th>
+                                <th>mergesort (ms)</th>
+                                <th>std::qsort (ms)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td>10,000</td>
+                                <td>0.28 (baseline)</td>
+                                <td>0.30 (1.09×)</td>
+                                <td>0.27 (0.97×)</td>
+                                <td>0.40 (1.42×)</td>
+                            </tr>
+                            <tr>
+                                <td>100,000</td>
+                                <td>3.52 (baseline)</td>
+                                <td>3.84 (1.09×)</td>
+                                <td>3.41 (0.97×)</td>
+                                <td>5.13 (1.46×)</td>
+                            </tr>
+                            <tr>
+                                <td>1,000,000</td>
+                                <td>42.36 (baseline)</td>
+                                <td>44.16 (1.04×)</td>
+                                <td>39.86 (0.94×)</td>
+                                <td>60.35 (1.42×)</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section class="installation-section">
+        <div class="container">
+            <h2 class="section-heading">Installation</h2>
+            <div class="steps">
+                <div class="step">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h3>Clone the repository</h3>
+                        <div class="code">
+                            git clone https://github.com/davidesantangelo/vsort.git
+                            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h3>Build the library</h3>
+                        <div class="code">
+                            cd vsort
+                            make
+                            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="step">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h3>Use in your project</h3>
+                        <div class="code">
+                            <pre>#include "vsort.h"
+
+// Create and initialize an array
+int array[] = {5, 2, 9, 1, 5, 6};
+
+// Calculate the size of the array
+int size = sizeof(array) / sizeof(array[0]);
+
+// Sort the array using vsort
+vsort(array, size);</pre>
+                            <button class="copy-btn" onclick="copyToClipboard(this)">Copy</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Revolutionary new footer design -->
+    <footer>
+        <div class="footer-wave"></div>
+        <div class="footer-container">
+            <div class="container">
+                <div class="footer-content">
+                    <div class="footer-brand">
+                        <div class="footer-logo">VSort</div>
+                        <div class="footer-tagline">High-performance sorting for Apple Silicon</div>
+                    </div>
+
+                    <div class="footer-author">
+                        <span class="author-label">Created by</span>
+                        <a href="https://github.com/davidesantangelo" class="author-name">Davide Santangelo</a>
+                    </div>
+
+                    <a href="https://github.com/davidesantangelo/vsort" class="footer-github"
+                        aria-label="GitHub repository">
+                        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path fill-rule="evenodd" clip-rule="evenodd"
+                                d="M12 0C5.37 0 0 5.37 0 12C0 17.31 3.435 21.795 8.205 23.385C8.805 23.49 9.03 23.13 9.03 22.815C9.03 22.53 9.015 21.585 9.015 20.58C6 21.135 5.22 19.845 4.98 19.17C4.845 18.825 4.26 17.76 3.75 17.475C3.33 17.25 2.73 16.695 3.735 16.68C4.68 16.665 5.355 17.55 5.58 17.91C6.66 19.725 8.385 19.215 9.075 18.9C9.18 18.12 9.495 17.595 9.84 17.295C7.17 16.995 4.38 15.96 4.38 11.37C4.38 10.065 4.845 8.985 5.61 8.145C5.49 7.845 5.07 6.615 5.73 4.965C5.73 4.965 6.735 4.65 9.03 6.195C9.99 5.925 11.01 5.79 12.03 5.79C13.05 5.79 14.07 5.925 15.03 6.195C17.325 4.635 18.33 4.965 18.33 4.965C18.99 6.615 18.57 7.845 18.45 8.145C19.215 8.985 19.68 10.05 19.68 11.37C19.68 15.975 16.875 16.995 14.205 17.295C14.64 17.67 15.015 18.39 15.015 19.515C15.015 21.12 15 22.41 15 22.815C15 23.13 15.225 23.505 15.825 23.385C18.2072 22.5807 20.2772 21.0497 21.7437 19.0074C23.2101 16.965 23.9993 14.5143 24 12C24 5.37 18.63 0 12 0Z"
+                                fill="currentColor" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            <div class="footer-sorting-animation">
+                <div class="footer-bars">
+                    <!-- Generate 30 bars for the animation -->
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                    <div class="footer-bar"></div>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Chart animation - Improved for clarity
+        document.addEventListener('DOMContentLoaded', function () {
+            const chartContainer = document.getElementById('performance-chart');
+            const algorithms = ['vsort', 'quicksort', 'mergesort', 'std::sort'];
+            const randomTimes = [50.98, 43.86, 60.20, 60.18];
+            const sortedTimes = [20.13, 58.42, 55.85, 61.24];
+
+            // Calculate width for each algorithm group
+            const containerWidth = chartContainer.offsetWidth;
+            const groupWidth = containerWidth / algorithms.length;
+            const maxTime = Math.max(...randomTimes, ...sortedTimes);
+
+            // Create algorithm groups
+            algorithms.forEach((algo, index) => {
+                // Create algorithm group
+                const algoGroup = document.createElement('div');
+                algoGroup.className = 'algorithm-group';
+                algoGroup.style.width = `${groupWidth}px`;
+                algoGroup.style.left = `${index * groupWidth}px`;
+
+                // Create bars container
+                const barsContainer = document.createElement('div');
+                barsContainer.className = 'bars-container';
+
+                // Random data bar
+                const randomBarWrap = document.createElement('div');
+                randomBarWrap.className = 'bar-wrap';
+
+                const randomBar = document.createElement('div');
+                randomBar.className = 'chart-bar random';
+                const randomHeight = (randomTimes[index] / maxTime) * 300;
+                randomBar.style.height = '0'; // Start at 0 for animation
+
+                const randomValue = document.createElement('div');
+                randomValue.className = 'bar-value';
+                randomValue.innerText = randomTimes[index] + 'ms';
+
+                randomBarWrap.appendChild(randomBar);
+                randomBarWrap.appendChild(randomValue);
+
+                // Nearly-sorted data bar
+                const sortedBarWrap = document.createElement('div');
+                sortedBarWrap.className = 'bar-wrap';
+
+                const sortedBar = document.createElement('div');
+                sortedBar.className = 'chart-bar nearly-sorted';
+                const sortedHeight = (sortedTimes[index] / maxTime) * 300;
+                sortedBar.style.height = '0'; // Start at 0 for animation
+
+                const sortedValue = document.createElement('div');
+                sortedValue.className = 'bar-value';
+                sortedValue.innerText = sortedTimes[index] + 'ms';
+
+                sortedBarWrap.appendChild(sortedBar);
+                sortedBarWrap.appendChild(sortedValue);
+
+                // Add bars to container
+                barsContainer.appendChild(randomBarWrap);
+                barsContainer.appendChild(sortedBarWrap);
+
+                // Create algorithm name
+                const algoName = document.createElement('div');
+                algoName.className = 'algorithm-name';
+                algoName.innerText = algo;
+
+                // Add all elements to algorithm group
+                algoGroup.appendChild(barsContainer);
+                algoGroup.appendChild(algoName);
+
+                // Add to chart
+                chartContainer.appendChild(algoGroup);
+
+                // Animate bars after a delay
+                setTimeout(() => {
+                    randomBar.style.height = randomHeight + 'px';
+                    sortedBar.style.height = sortedHeight + 'px';
+                }, 200 * index);
+            });
+        });
+
+        // Copy to clipboard function
+        function copyToClipboard(button) {
+            const codeBlock = button.parentElement;
+            const text = codeBlock.textContent.trim();
+
+            navigator.clipboard.writeText(text).then(() => {
+                const originalText = button.innerText;
+                button.innerText = 'Copied';
+                button.style.background = '#34c759';
+                button.style.color = 'white';
+                button.style.borderColor = '#34c759';
+
+                setTimeout(() => {
+                    button.innerText = originalText;
+                    button.style.background = '';
+                    button.style.color = '';
+                    button.style.borderColor = '';
+                }, 1500);
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            // Benchmark data
+            const benchmarkData = {
+                '10000': {
+                    'vsort': 0.28,
+                    'quicksort': 0.30,
+                    'mergesort': 0.27,
+                    'std::qsort': 0.40
+                },
+                '100000': {
+                    'vsort': 3.52,
+                    'quicksort': 3.84,
+                    'mergesort': 3.41,
+                    'std::qsort': 5.13
+                },
+                '1000000': {
+                    'vsort': 42.36,
+                    'quicksort': 44.16,
+                    'mergesort': 39.86,
+                    'std::qsort': 60.35
+                }
+            };
+
+            // Algorithm colors
+            const algorithmColors = {
+                'vsort': 'var(--accent)',
+                'quicksort': '#34c759',
+                'mergesort': '#ff9500',
+                'std::qsort': '#ff3b30'
+            };
+
+            const chartContainer = document.getElementById('performance-chart');
+            const tabButtons = document.querySelectorAll('.tab-btn');
+
+            // Initial render with 10,000 elements
+            renderChart('10000');
+
+            // Add event listeners to tab buttons
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function () {
+                    // Update active state
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    this.classList.add('active');
+
+                    // Render chart for selected size
+                    renderChart(this.dataset.size);
+                });
+            });
+
+            function renderChart(size) {
+                // Clear previous chart
+                chartContainer.innerHTML = '';
+
+                const data = benchmarkData[size];
+                const algorithms = Object.keys(data);
+                const maxTime = Math.max(...Object.values(data));
+
+                // Get container dimensions
+                const containerWidth = chartContainer.offsetWidth;
+                const isMobile = window.innerWidth <= 768;
+
+                // Use fewer bars on very small screens
+                const displayedAlgorithms = isMobile && containerWidth < 400 ?
+                    algorithms.slice(0, 2) : algorithms;
+
+                // Minimum content width ensures all bars are visible
+                const contentWidth = Math.max(containerWidth, isMobile ? 400 : 600);
+                const barCount = displayedAlgorithms.length;
+
+                // Calculate bar dimensions based on available space
+                const barWidth = Math.min(60, (contentWidth / barCount) * 0.6);
+                const spacing = Math.max(10, (contentWidth - (barWidth * barCount)) / (barCount + 1));
+
+                // Set chart minimum width if needed for scrolling
+                if (contentWidth > containerWidth) {
+                    chartContainer.style.minWidth = contentWidth + 'px';
+                }
+
+                const maxHeight = chartContainer.offsetHeight - 60;
+
+                // Create bars with appropriate dimensions
+                displayedAlgorithms.forEach((algo, index) => {
+                    const barHeight = (data[algo] / maxTime) * maxHeight;
+                    const xPos = spacing + (index * (barWidth + spacing));
+
+                    // Create bar
+                    const bar = document.createElement('div');
+                    bar.className = 'algorithm-bar';
+                    bar.style.background = algorithmColors[algo];
+                    bar.style.left = xPos + 'px';
+                    bar.style.width = barWidth + 'px';
+                    bar.style.height = '0'; // Start at 0 for animation
+
+                    // Create label
+                    const label = document.createElement('div');
+                    label.className = 'bar-label';
+                    label.innerText = `${data[algo]}ms`;
+
+                    // Add to DOM
+                    bar.appendChild(label);
+                    chartContainer.appendChild(bar);
+
+                    // Animate height after a small delay
+                    setTimeout(() => {
+                        bar.style.height = barHeight + 'px';
+                    }, 100 * index);
+
+                    // Add algorithm name below the bar
+                    const nameLabel = document.createElement('div');
+                    nameLabel.innerText = algo;
+                    nameLabel.style.position = 'absolute';
+                    nameLabel.style.bottom = '-30px';
+                    nameLabel.style.left = xPos + 'px';
+                    nameLabel.style.width = barWidth + 'px';
+                    nameLabel.style.textAlign = 'center';
+                    nameLabel.style.fontSize = isMobile ? '12px' : '14px'; // Smaller font on mobile
+                    nameLabel.style.fontWeight = '500';
+                    nameLabel.style.whiteSpace = 'nowrap';
+
+                    chartContainer.appendChild(nameLabel);
+                });
+            }
+
+            // Add window resize listener to update chart on screen size changes
+            window.addEventListener('resize', function () {
+                const activeTab = document.querySelector('.tab-btn.active');
+                if (activeTab) {
+                    renderChart(activeTab.dataset.size);
+                }
+            });
+        });
+
+        // Animation for the sort visualization in the hero section
+        document.addEventListener('DOMContentLoaded', function () {
+            const sortBarsContainer = document.getElementById('sort-bars');
+            const shuffleBtn = document.getElementById('shuffle-btn');
+            const sortBtn = document.getElementById('sort-btn');
+            const demoBtn = document.getElementById('demo-btn');
+
+            // Create 20 bars with random heights
+            function createBars() {
+                sortBarsContainer.innerHTML = '';
+                const values = [];
+
+                // Generate random values
+                for (let i = 0; i < 20; i++) {
+                    values.push(Math.floor(Math.random() * 80) + 10); // 10-90% height
+                }
+
+                // Create bars with these values
+                values.forEach((value) => {
+                    const bar = document.createElement('div');
+                    bar.className = 'sort-bar';
+                    bar.style.height = `${value}%`;
+                    bar.dataset.height = value;
+                    sortBarsContainer.appendChild(bar);
+                });
+            }
+
+            // Simple bubble sort animation
+            async function bubbleSort() {
+                const bars = sortBarsContainer.querySelectorAll('.sort-bar');
+                const n = bars.length;
+
+                // Disable buttons during sorting
+                shuffleBtn.disabled = true;
+                sortBtn.disabled = true;
+
+                for (let i = 0; i < n; i++) {
+                    for (let j = 0; j < n - i - 1; j++) {
+                        // Highlight bars being compared
+                        bars[j].style.backgroundColor = '#ffcc00';
+                        bars[j + 1].style.backgroundColor = '#ffcc00';
+
+                        // Wait to visualize the comparison
+                        await new Promise(r => setTimeout(r, 50));
+
+                        const val1 = parseInt(bars[j].dataset.height);
+                        const val2 = parseInt(bars[j + 1].dataset.height);
+
+                        if (val1 > val2) {
+                            // Swap the bars
+                            const tempHeight = bars[j].style.height;
+                            const tempData = bars[j].dataset.height;
+
+                            bars[j].style.height = bars[j + 1].style.height;
+                            bars[j].dataset.height = bars[j + 1].dataset.height;
+
+                            bars[j + 1].style.height = tempHeight;
+                            bars[j + 1].dataset.height = tempData;
+
+                            // Wait to visualize the swap
+                            await new Promise(r => setTimeout(r, 50));
+                        }
+
+                        // Reset bar colors
+                        bars[j].style.removeProperty('background-color');
+                        bars[j + 1].style.removeProperty('background-color');
+                    }
+
+                    // Mark the sorted bar
+                    bars[n - i - 1].style.backgroundColor = '#34c759';
+                }
+
+                // Re-enable buttons after sorting
+                shuffleBtn.disabled = false;
+                sortBtn.disabled = false;
+            }
+
+            // Initial bars
+            createBars();
+
+            // Event listeners for buttons
+            shuffleBtn.addEventListener('click', createBars);
+            sortBtn.addEventListener('click', bubbleSort);
+            demoBtn.addEventListener('click', () => {
+                // Scroll to the performance section
+                document.querySelector('.performance-container').scrollIntoView({
+                    behavior: 'smooth'
+                });
+            });
+        });
+    </script>
+</body>
+
+</html>

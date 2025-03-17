@@ -1,0 +1,62 @@
+# Build directories and output
+build/
+cmake-build*/
+out/
+bin/
+lib/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+Testing/
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+
+# C/C++ specific
+*.o
+*.obj
+*.so
+*.a
+*.dll
+*.dylib
+*.lib
+*.exe
+*.out
+*.app
+*.dSYM/
+*.pdb
+*.ilk
+*.idb
+
+# IDE files
+.vs/
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+*~
+*.rej
+*.orig
+
+# macOS specific files
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+# Windows specific files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Log files
+*.log
