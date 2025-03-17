@@ -72,21 +72,30 @@ jobs:
         cmake_minimum_required(VERSION 3.14)
         project(vsort C)
 
-        # Set version
+        # Set version and disable DLL imports/exports
         set(VSORT_VERSION "0.2.1")
         add_definitions(-DVSORT_VERSION="${VSORT_VERSION}")
         add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-
+        add_definitions(-DVSORT_STATIC)
+        add_definitions(-DBUILD_STATIC)
+        add_definitions(-DVSORT_API=)
+        
         # Add optimization flags
         set(CMAKE_C_FLAGS "/O2 /Ot /GL")
+
+        # Ensure static build
+        set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build shared libraries" FORCE)
+        set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
 
         # Create static library
         add_library(vsort STATIC vsort.c)
         target_include_directories(vsort PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+        target_compile_definitions(vsort PRIVATE BUILDING_STATIC VSORT_STATIC VSORT_API=)
 
         # Example executable
         add_executable(basic_example examples/basic_example.c)
         target_link_libraries(basic_example vsort)
+        target_compile_definitions(basic_example PRIVATE VSORT_STATIC VSORT_API=)
 
         # Setup tests
         enable_testing()
@@ -97,7 +106,7 @@ jobs:
         Rename-Item -Path "${{ github.workspace }}/CMakeLists.txt" -NewName "CMakeLists.txt.bak" -Force
         # Create our simplified Windows version
         Set-Content -Path "${{ github.workspace }}/CMakeLists.txt" -Value $content
-    
+
     - name: Configure CMake for Windows
       if: runner.os == 'Windows'
       run: >
@@ -111,7 +120,6 @@ jobs:
     - name: Test
       working-directory: ${{ steps.strings.outputs.build-output-dir }}
       run: ctest --build-config ${{ matrix.build_type }}
-
     - name: Restore Original CMakeLists.txt 
       if: runner.os == 'Windows' && always()
       shell: pwsh
