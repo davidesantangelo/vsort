@@ -66,19 +66,19 @@ jobs:
         -DCMAKE_CXX_FLAGS="-O3 -ffast-math -ftree-vectorize -funroll-loops"
         -S ${{ github.workspace }}
 
+    - name: Create Windows Toolchain File
+      if: runner.os == 'Windows'
+      shell: pwsh
+      run: |
+        Copy-Item "${{ github.workspace }}/.github/workflows/windows-toolchain.cmake" -Destination "${{ github.workspace }}/windows-toolchain.cmake"
+    
     - name: Configure CMake for Windows
       if: runner.os == 'Windows'
-      # Configure CMake with MSVC specific flags for Windows
+      # Configure CMake with MSVC using the toolchain file
       run: >
         cmake -B ${{ steps.strings.outputs.build-output-dir }}
-        -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
-        -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
+        -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/windows-toolchain.cmake
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -DWINDOWS_EXPORT_ALL_SYMBOLS=ON
-        -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
-        -DBUILD_SHARED_LIBS=OFF
-        -DCMAKE_C_FLAGS="/O2 /Ot /GL"
-        -DCMAKE_CXX_FLAGS="/O2 /Ot /GL"
         -S ${{ github.workspace }}
 
     - name: Build
