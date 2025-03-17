@@ -74,8 +74,11 @@ jobs:
         -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }}
         -DCMAKE_C_COMPILER=${{ matrix.c_compiler }}
         -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-        -DCMAKE_C_FLAGS="/O2 /Ot /GL /wd4255 /wd4013"
-        -DCMAKE_CXX_FLAGS="/O2 /Ot /GL /wd4255 /wd4013"
+        -DWINDOWS_EXPORT_ALL_SYMBOLS=ON
+        -DCMAKE_WINDOWS_EXPORT_ALL_SYMBOLS=ON
+        -DBUILD_SHARED_LIBS=OFF
+        -DCMAKE_C_FLAGS="/O2 /Ot /GL"
+        -DCMAKE_CXX_FLAGS="/O2 /Ot /GL"
         -S ${{ github.workspace }}
 
     - name: Build
