@@ -15,19 +15,16 @@ if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     add_compile_options(-mcpu=apple-a14)
 endif()
 
-# Add compile options
-add_compile_options(
-    -O3
-    -Wall
-    -ffast-math
-    -ftree-vectorize
-    -funroll-loops
-)
-
 # Define the library
 add_library(vsort 
     vsort.c
 )
+
+# For Windows, configure to build a proper DLL with exports
+if(WIN32)
+    target_compile_definitions(vsort PRIVATE VSORT_EXPORTS)
+    target_compile_definitions(vsort PRIVATE _CRT_SECURE_NO_WARNINGS)
+endif()
 
 target_include_directories(vsort 
     PUBLIC 
@@ -85,9 +82,7 @@ endif()
 
 # Platform-specific settings
 if(WIN32)
-    # Windows-specific settings
-    target_compile_definitions(vsort PRIVATE _CRT_SECURE_NO_WARNINGS)
-    # No need to link with math library on Windows - it's part of the standard library
+    # Windows-specific settings - no need to link with math library
 else()
     # Unix/Linux/macOS - link with math library
     target_link_libraries(vsort PRIVATE m)
@@ -111,6 +106,14 @@ foreach(example ${EXAMPLES})
     if(NOT WIN32)
         target_link_libraries(${example} m)  # Link math library
     endif()
+    # Add Windows-specific configurations for examples
+    if(MSVC)
+        target_compile_options(${example} PRIVATE 
+            /O2             # Optimize for speed
+            /fp:fast        # Fast floating point model
+        )
+        target_compile_definitions(${example} PRIVATE _CRT_SECURE_NO_WARNINGS)
+    endif()
 endforeach()
 
 # Tests
@@ -128,6 +131,14 @@ foreach(test ${TESTS})
     endif()
     if(NOT WIN32)
         target_link_libraries(${test} m)  # Link math library
+    endif()
+    # Add Windows-specific configurations for tests
+    if(MSVC)
+        target_compile_options(${test} PRIVATE 
+            /O2             # Optimize for speed
+            /fp:fast        # Fast floating point model
+        )
+        target_compile_definitions(${test} PRIVATE _CRT_SECURE_NO_WARNINGS)
     endif()
 endforeach()
 
