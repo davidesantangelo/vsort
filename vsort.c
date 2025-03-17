@@ -14,6 +14,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <time.h>
+#include "vsort.h"
 
 // Platform-specific includes
 #if defined(_WIN32) || defined(_MSC_VER)
@@ -395,7 +396,7 @@ void quicksort_optimized(int arr[], int size)
 }
 
 // Fix vsort main function
-void vsort(int arr[], int n)
+VSORT_API void vsort(int arr[], int n)
 {
     // Early exit for trivial cases
     if (!arr || n <= 1)
@@ -435,7 +436,7 @@ int select_pivot(int arr[], int low, int high) { return 0; }
 int partition_legacy(int arr[], int low, int high, int pivot) { return 0; }
 
 // Implementation of vsort_with_comparator
-void vsort_with_comparator(void *base, int n, size_t size, int (*compare)(const void *, const void *))
+VSORT_API void vsort_with_comparator(void *base, int n, size_t size, int (*compare)(const void *, const void *))
 {
     qsort(base, n, size, compare);
 }
@@ -445,7 +446,7 @@ static int default_float_comparator(const void *a, const void *b);
 static int default_char_comparator(const void *a, const void *b);
 
 // Implementation of vsort_float
-void vsort_float(float arr[], int n)
+VSORT_API void vsort_float(float arr[], int n)
 {
     // This is a simple implementation - you may want to optimize for floats specifically
     qsort(arr, n, sizeof(float), default_float_comparator);
@@ -465,7 +466,7 @@ static int default_float_comparator(const void *a, const void *b)
 }
 
 // Implementation of vsort_char
-void vsort_char(char arr[], int n)
+VSORT_API void vsort_char(char arr[], int n)
 {
     // This is a simple implementation - you may want to optimize for chars specifically
     qsort(arr, n, sizeof(char), default_char_comparator);
@@ -479,8 +480,7 @@ static int default_char_comparator(const void *a, const void *b)
 
 // For Windows, provide implementations for any missing functions
 #if defined(_WIN32) || defined(_MSC_VER)
-// Get number of processors on Windows
-int get_num_processors()
+VSORT_API int get_num_processors()
 {
     SYSTEM_INFO sysinfo;
     GetSystemInfo(&sysinfo);
@@ -488,7 +488,7 @@ int get_num_processors()
 }
 #else
 // Unix version
-int get_num_processors()
+VSORT_API int get_num_processors()
 {
     return (int)sysconf(_SC_NPROCESSORS_ONLN);
 }

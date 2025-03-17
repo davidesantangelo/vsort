@@ -16,14 +16,15 @@ if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
 endif()
 
 # Define the library
-add_library(vsort 
-    vsort.c
-)
-
-# For Windows, configure to build a proper DLL with exports
 if(WIN32)
+    # Create a shared library (DLL) on Windows
+    add_library(vsort SHARED vsort.c)
+    # Export symbols properly for DLL
     target_compile_definitions(vsort PRIVATE VSORT_EXPORTS)
     target_compile_definitions(vsort PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    # Create a static library on other platforms
+    add_library(vsort STATIC vsort.c)
 endif()
 
 target_include_directories(vsort 
