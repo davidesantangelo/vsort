@@ -1,62 +1,100 @@
-# Build directories and output
-build/
-cmake-build*/
-out/
-bin/
-lib/
+# Build directories
+/build/
+/builds/
+/Build/
+/out/
+/cmake-build-*/
+/CMakeFiles/
+/_deps/
 
 # CMake generated files
 CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-Testing/
-Makefile
 cmake_install.cmake
-install_manifest.txt
 compile_commands.json
 CTestTestfile.cmake
+*.cmake
+!CMakeLists.txt
+Makefile
+install_manifest.txt
 
-# C/C++ specific
+# Compiled Object files
 *.o
 *.obj
+*.lo
+*.ko
+*.slo
+
+# Compiled Dynamic libraries
 *.so
-*.a
-*.dll
+*.so.*
 *.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.la
+*.lai
 *.lib
+
+# Executables
 *.exe
 *.out
 *.app
-*.dSYM/
-*.pdb
-*.ilk
-*.idb
 
-# IDE files
-.vs/
+# Dependency files
+*.d
+
+# Editor and IDE files
 .vscode/
 .idea/
+.vs/
 *.swp
 *.swo
-*.sublime-workspace
-*.sublime-project
 *~
-*.rej
-*.orig
-
-# macOS specific files
 .DS_Store
-.AppleDouble
-.LSOverride
-._*
-.Spotlight-V100
-.Trashes
-
-# Windows specific files
 Thumbs.db
-ehthumbs.db
-Desktop.ini
-$RECYCLE.BIN/
+.dSYM/
+*.sublime*
+.atom/
+.project
+.cproject
+.settings/
+*.kdev4
+.kdev4/
+.directory
 
-# Log files
-*.log
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
+
+# Testing
+/Testing/
+
+# Code coverage
+*.gcov
+*.gcda
+*.gcno
+coverage.xml
+coverage/
+
+# Packaging
+*.tar.gz
+*.zip
+*.7z
+*.rpm
+*.deb
+
+# Documentation generated files
+/docs/html/
+/docs/latex/
+
+# Performance and profiling logs
+gmon.out
+callgrind.out.*
+perf.data*
+
+# Custom vsort specific ignores
+/vsort-*/
+/examples/output/
