@@ -30,6 +30,41 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 6. **Adaptive Algorithm Selection**:  
    VSort selects algorithms based on array size and data patterns, using insertion sort for small arrays (threshold around 16 elements) and quicksort for larger ones, with parallel processing for very large arrays.
 
+## Current Implementation Status
+
+VSort is under active development with the following features at different stages:
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| NEON Vectorization | Partially Implemented | Basic vector operations for merging, partitioning optimization in progress |
+| P/E Core Detection | Implemented | Basic detection and utilization of different core types |
+| Grand Central Dispatch | Implemented | Used for parallel workload distribution |
+| Adaptive Algorithm Selection | Implemented | Basic switching between algorithms based on input size |
+| Cache Optimization | Planned | Currently uses fixed thresholds, not fully cache-aware yet |
+| Branch Prediction Optimization | Planned | To be implemented in next release |
+
+### Performance Reality
+
+While VSort demonstrates improvements over standard algorithms, current gains are modest:
+- ~12% over standard quicksort
+- ~1-4% over mergesort
+- ~50% over std::qsort
+
+The largest benefits currently appear with:
+- Very large arrays (1M+ elements)
+- Nearly-sorted or reverse-sorted data
+- Workloads that benefit from parallel processing
+
+## Roadmap
+
+Upcoming improvements planned for VSort:
+
+1. **Enhanced NEON Implementation**: Complete vectorization of partition and merge operations
+2. **Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics
+3. **Better P/E Core Utilization**: Improved workload distribution between core types
+4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns
+5. **Branch Prediction Improvements**: Reducing branch mispredictions in comparison operations
+
 ## Parallel Workload Management
 
 For optimal performance across all cores, VSort 0.3.0 features:
@@ -58,7 +93,6 @@ VSort demonstrates:
 - Excellent performance for already sorted or reverse-sorted data
 - Up to 3.5x speedup for reverse-sorted data compared to random data
 - Efficient scaling from small to large array sizes
-
 
 ## Algorithm Comparison
 
