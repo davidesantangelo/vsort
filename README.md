@@ -159,17 +159,19 @@ vsort(array, size);
 git clone https://github.com/davidesantangelo/vsort.git
 cd vsort
 
+# Create a build directory and configure the project
+mkdir build
+cd build
+cmake ..
+
 # Build everything (library, tests, and examples)
-make
+cmake --build .
 
-# Build just the library
-make libvsort.a
-
-# Check compiler and build settings
-make compiler-info
+# Run all tests
+ctest
 ```
 
-The unified Makefile automatically detects your hardware and applies appropriate optimizations:
+CMake automatically detects your hardware and applies appropriate optimizations:
 
 - On Apple Silicon, NEON vector instructions and GCD optimizations are enabled
 - OpenMP parallelization is used when available (install GCC or LLVM with OpenMP for best results)
@@ -178,13 +180,10 @@ The unified Makefile automatically detects your hardware and applies appropriate
 ### Running Tests
 
 ```bash
-# Run all tests
-make test
+# From the build directory, run all tests
+ctest
 
-# Build tests without running them
-make tests
-
-# Run individual tests directly
+# Run specific tests
 ./tests/test_basic         # Basic functionality tests
 ./tests/test_performance   # Performance benchmark tests
 ./tests/test_apple_silicon # Tests specific to Apple Silicon
@@ -193,8 +192,7 @@ make tests
 ### Running Benchmarks
 
 ```bash
-# Build all examples
-make examples
+# Build directory already contains all examples
 
 # Run the standard benchmark with custom parameters
 ./examples/benchmark --size 1000000 --algorithms "vsort,quicksort,mergesort,std::sort"
