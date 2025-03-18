@@ -2,13 +2,21 @@
 
 VSort is a high-performance sorting library that leverages the unique architecture of Apple Silicon processors to deliver exceptional performance. By intelligently utilizing ARM NEON vector instructions, Grand Central Dispatch, and the heterogeneous core design of M-series chips, VSort achieves remarkable efficiency particularly for partially sorted data collections.
 
-VSort represents an advanced sorting solution for Apple Silicon, combining ARM NEON, GCD, heterogeneous core management, and adaptive algorithms. Its performance is competitive, with significant improvements for partially sorted or large datasets, making it suitable for high-performance computing tasks on macOS.
-
 **Current Version: 0.3.0**
 
 **Author: [Davide Santangelo](https://github.com/davidesantangelo)**
 
-## Apple Silicon Optimizations
+## Table of Contents
+- [Features & Optimizations](#features--optimizations)
+- [Performance](#performance)
+- [Usage](#usage)
+- [Building & Testing](#building-and-testing)
+- [Technical Details](#technical-details)
+- [Development](#development)
+
+## Features & Optimizations
+
+### Apple Silicon Optimizations
 
 VSort's optimizations are designed to maximize performance on Apple Silicon, with the following key aspects:
 
@@ -30,9 +38,15 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 6. **Adaptive Algorithm Selection**:  
    VSort selects algorithms based on array size and data patterns, using insertion sort for small arrays (threshold around 16 elements) and quicksort for larger ones, with parallel processing for very large arrays.
 
-## Current Implementation Status
+### Key Technical Features
 
-VSort is under active development with the following features at different stages:
+- **Vectorized Partitioning**: Uses NEON SIMD instructions to accelerate the partitioning step
+- **Parallelized Sorting**: Distributes work across multiple cores for large arrays
+- **Optimized Insertion Sort**: Enhanced for Apple's branch prediction units
+- **Three-Way Partitioning**: Efficiently handles duplicate elements
+- **QoS Integration**: Uses Apple's Quality of Service APIs for optimal core utilization
+
+### Current Implementation Status
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -43,29 +57,7 @@ VSort is under active development with the following features at different stage
 | Cache Optimization | Planned | Currently uses fixed thresholds, not fully cache-aware yet |
 | Branch Prediction Optimization | Planned | To be implemented in next release |
 
-### Performance Reality
-
-While VSort demonstrates improvements over standard algorithms, current gains are modest:
-- ~12% over standard quicksort
-- ~1-4% over mergesort
-- ~50% over std::qsort
-
-The largest benefits currently appear with:
-- Very large arrays (1M+ elements)
-- Nearly-sorted or reverse-sorted data
-- Workloads that benefit from parallel processing
-
-## Roadmap
-
-Upcoming improvements planned for VSort:
-
-1. **Enhanced NEON Implementation**: Complete vectorization of partition and merge operations
-2. **Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics
-3. **Better P/E Core Utilization**: Improved workload distribution between core types
-4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns
-5. **Branch Prediction Improvements**: Reducing branch mispredictions in comparison operations
-
-## Parallel Workload Management
+### Parallel Workload Management
 
 For optimal performance across all cores, VSort 0.3.0 features:
 
@@ -75,7 +67,9 @@ For optimal performance across all cores, VSort 0.3.0 features:
 - Optimized thread count allocation based on array size and core types
 - Vectorized merge operations using NEON when possible
 
-## Performance Characteristics
+## Performance
+
+### Performance Characteristics
 
 The latest benchmark results on Apple Silicon (M4) show impressive performance:
 
@@ -94,7 +88,7 @@ VSort demonstrates:
 - Up to 3.5x speedup for reverse-sorted data compared to random data
 - Efficient scaling from small to large array sizes
 
-## Algorithm Comparison
+### Algorithm Comparison
 
 When compared to traditional sorting algorithms on Apple Silicon:
 
@@ -119,7 +113,7 @@ VSort provides:
 - Optimized memory usage vs traditional merge sort
 - Predictable performance characteristics
 
-## Benchmark Results
+### Benchmark Results
 
 Standard benchmark comparison with 1,000,000 random integers:
 
@@ -134,19 +128,7 @@ std::sort       60.70           60.46           PASSED
 
 VSort shows excellent minimum times (36.27ms), significantly better than all other algorithms including mergesort's best time (39.42ms). This indicates that VSort can achieve superior peak performance in optimal conditions.
 
-## Latest Optimization Highlights
-
-The latest version of VSort includes several key optimizations:
-
-1. **Enhanced NEON Vectorization**: Improved SIMD implementation for partitioning that processes 4 integers at once
-2. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
-3. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
-4. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
-5. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
-
-These optimizations help VSort consistently outperform other sorting algorithms, especially on Apple Silicon hardware, while maintaining low memory overhead compared to mergesort.
-
-## Large Array Performance
+### Large Array Performance
 
 VSort performs exceptionally well with large arrays:
 
@@ -158,14 +140,6 @@ Initializing array... DONE
 Sorting 2000000 elements... DONE (32.55 ms)
 Verifying (sampling)... PASSED
 ```
-
-## Key Technical Features
-
-- **Vectorized Partitioning**: Uses NEON SIMD instructions to accelerate the partitioning step
-- **Parallelized Sorting**: Distributes work across multiple cores for large arrays
-- **Optimized Insertion Sort**: Enhanced for Apple's branch prediction units
-- **Three-Way Partitioning**: Efficiently handles duplicate elements
-- **QoS Integration**: Uses Apple's Quality of Service APIs for optimal core utilization
 
 ## Usage
 
@@ -211,7 +185,7 @@ CMake automatically detects your hardware and applies appropriate optimizations:
 - OpenMP parallelization is used when available (install GCC or LLVM with OpenMP for best results)
 - Standard optimizations are applied on other platforms
 
-### Running Tests
+### Running Tests and Benchmarks
 
 ```bash
 # From the build directory, run all tests
@@ -221,74 +195,42 @@ ctest
 ./tests/test_basic         # Basic functionality tests
 ./tests/test_performance   # Performance benchmark tests
 ./tests/test_apple_silicon # Tests specific to Apple Silicon
-```
-
-### Running Benchmarks
-
-```bash
-# Build directory already contains all examples
 
 # Run the standard benchmark with custom parameters
 ./examples/benchmark --size 1000000 --algorithms "vsort,quicksort,mergesort,std::sort"
 
 # Run the Apple Silicon specific benchmark
 ./examples/apple_silicon_test
-
-# Run a basic example
-./examples/basic_example
 ```
 
 ### Examples
 
-The project includes several example programs demonstrating different use cases for the vsort library:
+The project includes several example programs demonstrating different use cases:
 
-### Basic Examples
-
+#### Basic Examples
 - **basic_example.c**: Simple demonstration of sorting an integer array
 - **float_sorting_example.c**: Shows how to sort floating-point numbers
 - **char_sorting_example.c**: Demonstrates sorting character arrays
 
-### Advanced Examples
-
-- **custom_comparator_example.c**: Shows how to use a custom comparator function to sort in descending order
+#### Advanced Examples
+- **custom_comparator_example.c**: Shows how to use a custom comparator function
 - **struct_sorting_example.c**: Demonstrates sorting structures based on different fields
-- **performance_benchmark.c**: Benchmarks vsort against the standard library's qsort
-- **benchmark.c**: More detailed performance testing
+- **performance_benchmark.c**: Benchmarks vsort against standard library sorting
+- **apple_silicon_test.c**: Tests optimizations specific to Apple Silicon
 
-### Platform-Specific Examples
+## Technical Details
 
-- **apple_silicon_test.c**: Tests optimizations specific to Apple Silicon (only available on macOS/arm64)
+### Latest Optimization Highlights
 
-### Building and Running the Examples
+The latest version of VSort includes several key optimizations:
 
-To build all examples:
+1. **Enhanced NEON Vectorization**: Improved SIMD implementation for partitioning that processes 4 integers at once
+2. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
+3. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
+4. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
+5. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
 
-```bash
-make examples
-```
-
-To run a specific example:
-
-```bash
-./examples/basic_example
-./examples/struct_sorting_example
-# etc.
-```
-
-### Cleaning Up
-
-```bash
-# Remove all generated files
-make clean
-```
-
-### Troubleshooting Build Issues
-
-- **Missing OpenMP**: This warning is expected with Apple's default Clang, but doesn't affect basic functionality
-- **Apple Silicon optimizations unavailable**: Will occur on non-ARM64 macOS systems
-- **Compilation errors**: Usually due to incompatible compiler flags; try `make compiler-info` to diagnose
-
-## Computational Complexity
+### Computational Complexity
 
 VSort is based on an optimized hybrid sorting algorithm with the following complexity characteristics:
 
@@ -301,17 +243,9 @@ VSort is based on an optimized hybrid sorting algorithm with the following compl
   - O(log n) - Iterative implementation uses a stack for managing partitions
   - O(1) additional memory for in-place sorting operations
 
-While the asymptotic complexity matches traditional quicksort, VSort's optimization techniques significantly improve performance constants:
+While the asymptotic complexity matches traditional quicksort, VSort's optimization techniques significantly improve performance constants.
 
-- Insertion sort for small subarrays reduces overhead
-- Vectorized operations process multiple elements in parallel
-- Parallel execution on multiple cores reduces effective time complexity
-- Adaptive algorithm selection optimizes for different data patterns
-- Cache-friendly memory access patterns minimize performance bottlenecks
-
-These optimizations don't change the mathematical complexity but deliver substantial real-world performance improvements, especially on Apple Silicon hardware where the vectorization and parallelization benefits are maximized.
-
-## Performance Tuning
+### Performance Tuning
 
 VSort automatically optimizes for:
 
@@ -320,14 +254,21 @@ VSort automatically optimizes for:
 - **Hardware capabilities**: Adaptation to available cores and vector units
 - **Memory constraints**: Balance between memory usage and speed
 
-Advanced users can tune performance by:
+Advanced users can tune performance by adjusting thresholds for algorithm selection, configuring parallelization parameters, and enabling specific SIMD optimizations.
 
-- Adjusting thresholds for insertion sort vs. quicksort
-- Configuring parallelization parameters
-- Setting custom memory management options
-- Enabling specific SIMD optimizations
+## Development
 
-## License
+### Roadmap
+
+Upcoming improvements planned for VSort:
+
+1. **Enhanced NEON Implementation**: Complete vectorization of partition and merge operations
+2. **Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics
+3. **Better P/E Core Utilization**: Improved workload distribution between core types
+4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns
+5. **Branch Prediction Improvements**: Reducing branch mispredictions in comparison operations
+
+### License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
