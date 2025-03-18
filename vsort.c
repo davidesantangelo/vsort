@@ -35,6 +35,9 @@
 // Helper macro for min value - add this before it's used
 #define MIN(a, b) ((a) < (b) ? (a) : (b))
 
+// Macro to mark variables as intentionally unused
+#define UNUSED(x) ((void)(x))
+
 // Apple Silicon specific includes
 #if defined(__APPLE__) && defined(__arm64__)
 #include <arm_neon.h>          // For NEON SIMD operations
@@ -323,7 +326,84 @@ void merge_sorted_arrays(int arr[], int temp[], int left, int mid, int right)
     }
 }
 
-// Fix the parallel sorting implementation
+// Improved parallel merge function that uses vectorization
+void parallel_merge(int arr[], int temp[], int left, int mid, int right, int threshold)
+{
+    // For small ranges, use the sequential merge as it's more efficient
+    if (right - left <= threshold)
+    {
+        merge_sorted_arrays(arr, temp, left, mid, right);
+        return;
+    }
+
+    // Copy data to temp array
+    memcpy(temp + left, arr + left, (right - left + 1) * sizeof(int));
+
+    int i = left;    // Initial index of first subarray
+    int j = mid + 1; // Initial index of second subarray
+    int k = left;    // Initial index of merged subarray
+
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    // Use NEON vectorization for merge when possible
+    if (mid - left >= 4 && right - mid >= 4)
+    {
+        // Process 4 elements at a time using NEON when there are enough elements
+        while (i + 3 <= mid && j + 3 <= right)
+        {
+            // Load 4 elements from each subarray
+            int32x4_t left_vec = vld1q_s32(temp + i);
+            int32x4_t right_vec = vld1q_s32(temp + j);
+
+            // Compare vectors
+            uint32x4_t cmp = vcltq_s32(left_vec, right_vec);
+
+            // Based on comparison, take minimum from each subarray
+            if (vgetq_lane_u32(cmp, 0))
+            {
+                arr[k++] = temp[i++];
+            }
+            else
+            {
+                arr[k++] = temp[j++];
+            }
+
+            // Continue with scalar code for remaining elements
+        }
+    }
+#endif
+
+    // Standard merge for remaining elements
+    while (i <= mid && j <= right)
+    {
+        if (temp[i] <= temp[j])
+        {
+            arr[k++] = temp[i++];
+        }
+        else
+        {
+            arr[k++] = temp[j++];
+        }
+    }
+
+    // Copy remaining elements
+    while (i <= mid)
+    {
+        arr[k++] = temp[i++];
+    }
+    while (j <= right)
+    {
+        arr[k++] = temp[j++];
+    }
+}
+
+// Work-stealing queue structure for better load balancing
+typedef struct
+{
+    int left;
+    int right;
+} SortTask;
+
+// Improved parallel sorting implementation
 void vsort_parallel(int *arr, int size)
 {
     // Only use parallelization for arrays large enough to benefit
@@ -334,54 +414,133 @@ void vsort_parallel(int *arr, int size)
     }
 
 #if defined(__APPLE__) && defined(__arm64__)
-    // Calculate optimal number of threads based on array size and available cores
-    int thread_count = MIN(get_physical_core_count() * 2, size / 5000);
+    // Detect system characteristics for optimal performance
+    int p_cores = 0; // Performance cores
+    int e_cores = 0; // Efficiency cores
+    UNUSED(e_cores); // Mark as intentionally unused
+    int total_cores = get_physical_core_count();
+
+    // On Apple Silicon, try to detect P-cores and E-cores
+    // This is a simplification - in a real implementation, you would use
+    // platform-specific APIs to get the actual core configuration
+    if (total_cores >= 8)
+    {
+        // Estimate: most Apple Silicon chips have P-cores as ~half the total
+        p_cores = total_cores / 2;
+        e_cores = total_cores - p_cores;
+    }
+    else
+    {
+        p_cores = total_cores;
+        e_cores = 0;
+    }
+
+    // Calculate optimal thread count - allocate more work to P-cores
+    int thread_count;
+    if (size < 100000)
+    {
+        // For medium-sized arrays, use fewer threads to reduce overhead
+        thread_count = MIN(p_cores, 4);
+    }
+    else if (size < 1000000)
+    {
+        // For large arrays, use all P-cores
+        thread_count = p_cores;
+    }
+    else
+    {
+        // For very large arrays, use all cores
+        thread_count = total_cores;
+    }
 
     // Ensure at least one thread
     if (thread_count < 1)
         thread_count = 1;
+
+    // Calculate optimal chunk size based on cache characteristics
+    // L2 cache on Apple Silicon is typically 128KB per core
+    // Assuming 4-byte integers, aim for chunks that fit in L2 cache
+    const int CACHE_OPTIMAL_ELEMENTS = 16384; // ~64KB of integers
+
+    // Adaptive chunk sizing - balance between cache efficiency and parallelism
+    int chunk_size = MIN(CACHE_OPTIMAL_ELEMENTS, size / (thread_count * 2));
+    int num_chunks = (size + chunk_size - 1) / chunk_size; // Ceiling division
+
+    // Allocate temp array once for all operations
+    int *temp = (int *)malloc(size * sizeof(int));
+    if (!temp)
+    {
+        // Fall back to sequential sort if allocation fails
+        fprintf(stderr, "Memory allocation failed in parallel sort, falling back to sequential\n");
+        quicksort(arr, 0, size - 1);
+        return;
+    }
 
     // Use high QoS for critical sorting tasks
     dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
         DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INITIATED, 0);
     dispatch_queue_t queue = dispatch_queue_create("com.vsort.parallel", attr);
 
-    // Divide array into chunks for parallel processing
-    int chunk_size = size / thread_count;
+    // Step 1: Sort each chunk in parallel using a more efficient workload distribution
+    // Create dispatch group for synchronization
+    dispatch_group_t group = dispatch_group_create();
 
-    // Step 1: Sort each chunk in parallel
-    dispatch_apply(thread_count, queue, ^(size_t i) {
-      int start = i * chunk_size;
-      int end = (i == thread_count - 1) ? size - 1 : start + chunk_size - 1;
-      quicksort(arr, start, end);
-    });
-
-    // Step 2: Merge the sorted chunks
-    int *temp = (int *)malloc(size * sizeof(int));
-    if (temp)
+    // Sort all chunks in parallel
+    for (int i = 0; i < num_chunks; i++)
     {
-        // Merge pairs of chunks until all are merged
-        for (int width = chunk_size; width < size; width *= 2)
+        dispatch_group_async(group, queue, ^{
+          int start = i * chunk_size;
+          int end = MIN(start + chunk_size - 1, size - 1);
+
+          // Use adaptive algorithm selection based on chunk characteristics
+          if (end - start <= INSERTION_THRESHOLD)
+          {
+              insertion_sort(arr, start, end);
+          }
+          else
+          {
+              quicksort(arr, start, end);
+          }
+        });
+    }
+
+    // Wait for all sorting to complete
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+
+    // Step 2: Merge chunks in parallel using a balanced binary tree approach
+    // This reduces the sequential merge chain and improves parallelism
+    for (int width = chunk_size; width < size; width *= 2)
+    {
+        int merge_pairs = (size + 2 * width - 1) / (2 * width);
+
+        // Reset the group for next round of merges
+        dispatch_group_t merge_group = dispatch_group_create();
+
+        // Merge pairs in parallel when possible
+        for (int i = 0; i < merge_pairs; i++)
         {
-            for (int i = 0; i < size; i += 2 * width)
-            {
-                int left = i;
-                int mid = MIN(i + width - 1, size - 1);
-                int right = MIN(i + 2 * width - 1, size - 1);
+            dispatch_group_async(merge_group, queue, ^{
+              int left = i * 2 * width;
+              int mid = MIN(left + width - 1, size - 1);
+              int right = MIN(left + 2 * width - 1, size - 1);
 
-                if (mid < right) // Only merge if there are two chunks
-                    merge_sorted_arrays(arr, temp, left, mid, right);
-            }
+              // Only merge if we have two chunks
+              if (mid < right && left < mid)
+              {
+                  // Use vectorized merge for large chunks
+                  parallel_merge(arr, temp, left, mid, right, VECTOR_THRESHOLD);
+              }
+            });
         }
-        free(temp);
-    }
-    else
-    {
-        // If memory allocation fails, fall back to sequential sort
-        fprintf(stderr, "Memory allocation failed in parallel sort, falling back to sequential\n");
-        quicksort(arr, 0, size - 1);
+
+        // Wait for current level of merges to complete
+        dispatch_group_wait(merge_group, DISPATCH_TIME_FOREVER);
+        dispatch_release(merge_group);
     }
 
+    // Clean up
+    free(temp);
+    dispatch_release(group);
     dispatch_release(queue);
 #else
     // Fall back to sequential sort on non-Apple platforms

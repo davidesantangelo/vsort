@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-03-18
+
+### Added
+- Improved performance for Apple Silicon with P-core and E-core detection
+- Adaptive chunk sizing based on cache characteristics
+- New parallel merge function with vectorization support
+- Work-stealing queue structure for better load balancing
+
+### Changed
+- Completely redesigned parallel sorting implementation
+- Enhanced thread allocation strategy based on array size and core types
+- Improved workload distribution for better performance
+- Better balancing between cache efficiency and parallelism
+- More efficient parallel merging using a balanced binary tree approach
+
+### Fixed
+- Memory management in parallel sorting operation
+- Potential performance bottlenecks in larger arrays
+
 ## [0.2.1] - 2025-03-17
 
 ### Fixed

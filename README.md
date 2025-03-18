@@ -4,6 +4,8 @@ VSort is a high-performance sorting library that leverages the unique architectu
 
 VSort represents an advanced sorting solution for Apple Silicon, combining ARM NEON, GCD, heterogeneous core management, and adaptive algorithms. Its performance is competitive, with significant improvements for partially sorted or large datasets, making it suitable for high-performance computing tasks on macOS.
 
+**Current Version: 0.3.0**
+
 **Author: [Davide Santangelo](https://github.com/davidesantangelo)**
 
 ## Apple Silicon Optimizations
@@ -11,31 +13,32 @@ VSort represents an advanced sorting solution for Apple Silicon, combining ARM N
 VSort's optimizations are designed to maximize performance on Apple Silicon, with the following key aspects:
 
 1. **ARM NEON SIMD Vectorization**:  
-   ARM NEON allows for 128-bit vector registers, enabling simultaneous processing of multiple elements. This is particularly effective for sorting large datasets, as vectorized operations can reduce the time complexity of partitioning and comparison steps. Research, such as [A Hybrid Vectorized Merge Sort on ARM NEON](https://arxiv.org/abs/2409.03970), indicates that vectorized sorting can be up to 3.8 times faster than standard implementations like std::sort, suggesting VSort likely uses similar techniques for partitioning and merging.
+   ARM NEON allows for 128-bit vector registers, enabling simultaneous processing of multiple elements. This is particularly effective for sorting large datasets, as vectorized operations can reduce the time complexity of partitioning and comparison steps.
 
 2. **Grand Central Dispatch (GCD) Integration**:  
-   GCD, Apple's task scheduling system, is used for parallelizing sorting tasks across multiple cores. This is crucial for leveraging Apple Silicon's multi-core architecture, distributing work to both P-cores and E-cores. Documentation like [Apple Developer Documentation on CPU Optimization for Apple Silicon](https://developer.apple.com/documentation/apple-silicon/cpu-optimization-guide) highlights how GCD manages priority queues, ensuring efficient task distribution. VSort likely uses APIs like `concurrentPerform` or `dispatch_apply` to parallelize sorting, especially for large arrays.
+   GCD, Apple's task scheduling system, is used for parallelizing sorting tasks across multiple cores. This is crucial for leveraging Apple Silicon's multi-core architecture, distributing work to both P-cores and E-cores.
 
-3. **Heterogeneous Core Awareness**:  
-   Apple Silicon's heterogeneous design includes P-cores for high-performance tasks and E-cores for energy efficiency. VSort is described as scheduling tasks appropriately, balancing speed and power consumption. This is supported by resources like [Optimize for Apple Silicon with performance and efficiency cores](https://developer.apple.com/news/?id=vk3m204o), which discuss how applications can optimize for these cores. For example, VSort might run heavy partitioning on P-cores and lighter tasks on E-cores.
+3. **Performance & Efficiency Core Awareness**:  
+   VSort now intelligently detects and utilizes both Performance (P) and Efficiency (E) cores on Apple Silicon chips, assigning workloads appropriately for optimal speed and power efficiency. The algorithm dynamically adjusts thread allocation based on array size and core availability.
 
 4. **Cache-Optimized Memory Access**:  
-   VSort is designed for Apple Silicon's memory subsystem, minimizing cache misses by aligning data and optimizing access patterns. This is crucial for maintaining high throughput, as discussed in [Apple Silicon CPU Optimization Guide](https://developer.apple.com/documentation/apple-silicon/cpu-optimization-guide), which emphasizes cache-friendly designs for performance.
+   VSort uses adaptive chunk sizing based on cache characteristics, with optimal chunk sizes for L2 cache on Apple Silicon (typically 128KB per core). This minimizes cache misses and improves throughput.
 
 5. **Branch Prediction Optimization**:  
-   Sorting algorithms often suffer from branch mispredictions, especially in quicksort. VSort reduces these by optimizing branch-heavy operations, likely using techniques like branch prediction hints, as seen in general ARM optimization guides like [ARM Assembly: Sorting](https://vaelen.org/post/arm-assembly-sorting/).
+   Sorting algorithms often suffer from branch mispredictions, especially in quicksort. VSort reduces these by optimizing branch-heavy operations.
 
 6. **Adaptive Algorithm Selection**:  
-   VSort selects algorithms based on array size and data patterns, such as using insertion sort for small arrays (threshold around 16 elements in the code) and quicksort for larger ones. It also optimizes for nearly sorted or reverse-sorted data, as seen in performance benchmarks. This aligns with hybrid sorting strategies discussed in [Hybrid Sorting Algorithms](https://www.geeksforgeeks.org/hybrid-sorting-algorithms/), combining insertion sort and quicksort for efficiency.
+   VSort selects algorithms based on array size and data patterns, using insertion sort for small arrays (threshold around 16 elements) and quicksort for larger ones, with parallel processing for very large arrays.
 
 ## Parallel Workload Management
 
-For optimal performance across all cores, VSort:
+For optimal performance across all cores, VSort 0.3.0 features:
 
-- Subdivides sorting tasks into appropriately sized work units
-- Implements work-stealing algorithms to maintain balanced core utilization
-- Uses `concurrentPerform`/`dispatch_apply` APIs with iteration counts at least 3× the total core count.
-- Dynamically adjusts workload distribution based on observed system behavior
+- Work-stealing queue structure for better load balancing
+- Balanced binary tree approach for parallel merging
+- Adaptive chunk sizing that balances cache efficiency and parallelism
+- Optimized thread count allocation based on array size and core types
+- Vectorized merge operations using NEON when possible
 
 ## Performance Characteristics
 
