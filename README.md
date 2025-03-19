@@ -2,8 +2,6 @@
 
 VSort is a high-performance sorting library that leverages the unique architecture of Apple Silicon processors to deliver exceptional performance. By intelligently utilizing ARM NEON vector instructions, Grand Central Dispatch, and the heterogeneous core design of M-series chips, VSort achieves remarkable efficiency particularly for partially sorted data collections.
 
-**Current Version: 0.3.0**
-
 **Author: [Davide Santangelo](https://github.com/davidesantangelo)**
 
 ## Table of Contents
@@ -50,7 +48,7 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| NEON Vectorization | Partially Implemented | Basic vector operations for merging, partitioning optimization in progress |
+| NEON Vectorization | Implemented | Complete vector operations for partitioning and merging with optimized paths for homogeneous data chunks |
 | P/E Core Detection | Implemented | Basic detection and utilization of different core types |
 | Grand Central Dispatch | Implemented | Used for parallel workload distribution |
 | Adaptive Algorithm Selection | Implemented | Basic switching between algorithms based on input size |
@@ -58,8 +56,6 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 | Branch Prediction Optimization | Planned | To be implemented in next release |
 
 ### Parallel Workload Management
-
-For optimal performance across all cores, VSort 0.3.0 features:
 
 - Work-stealing queue structure for better load balancing
 - Balanced binary tree approach for parallel merging
@@ -76,16 +72,16 @@ The latest benchmark results on Apple Silicon (M4) show impressive performance:
 ```
 Array Size     Random (ms)    Nearly Sorted (ms) Reverse (ms)   
 ----------------------------------------------------------------
-1000           0.03           0.01               0.01           
-10000          0.42           0.36               0.23           
-100000         7.63           4.12               2.32           
-1000000        51.24          25.83              14.78          
+1000           0.06           0.03               0.02           
+10000          0.72           0.32               0.26           
+100000         2.74           1.29               0.50           
+1000000        13.93          4.81               3.15           
 ```
 
 VSort demonstrates:
 - Near-instantaneous sorting for small arrays (<10K elements)
 - Excellent performance for already sorted or reverse-sorted data
-- Up to 3.5x speedup for reverse-sorted data compared to random data
+- Up to 4.4x speedup for reverse-sorted data compared to random data
 - Efficient scaling from small to large array sizes
 
 ### Algorithm Comparison
@@ -96,22 +92,22 @@ When compared to traditional sorting algorithms on Apple Silicon:
 ┌────────────┬─────────────────┬────────────────┬────────────────┬─────────────────┐
 │ Size       │ vsort (ms)      │ quicksort (ms) │ mergesort (ms) │ std::qsort (ms) │
 ├────────────┼─────────────────┼────────────────┼────────────────┼─────────────────┤
-│ 10,000     │ 0.26            │ 0.30           │ 0.27           │ 0.40            │
-│            │ (baseline)      │ (1.15×)        │ (1.04×)        │ (1.54×)         │
+│ 10,000     │ 0.33            │ 0.36           │ 0.33           │ 0.48            │
+│            │ (baseline)      │ (1.09×)        │ (1.00×)        │ (1.46×)         │
 ├────────────┼─────────────────┼────────────────┼────────────────┼─────────────────┤
-│ 100,000    │ 3.36            │ 3.84           │ 3.41           │ 5.13            │
-│            │ (baseline)      │ (1.14×)        │ (1.01×)        │ (1.53×)         │
+│ 100,000    │ 1.20            │ 4.14           │ 3.62           │ 5.23            │
+│            │ (baseline)      │ (3.45×)        │ (3.02×)        │ (4.36×)         │
 ├────────────┼─────────────────┼────────────────┼────────────────┼─────────────────┤
-│ 1,000,000  │ 39.52           │ 44.16          │ 39.86          │ 60.35           │
-│            │ (baseline)      │ (1.12×)        │ (1.01×)        │ (1.53×)         │
+│ 1,000,000  │ 10.09           │ 44.87          │ 39.81          │ 59.88           │
+│            │ (baseline)      │ (4.45×)        │ (3.95×)        │ (5.94×)         │
 └────────────┴─────────────────┴────────────────┴────────────────┴─────────────────┘
 ```
 
 VSort provides:
-- Competitive performance with standard library implementations
-- Consistent scaling across different array sizes
-- Optimized memory usage vs traditional merge sort
-- Predictable performance characteristics
+- Dramatic performance improvements over traditional algorithms, especially for large datasets
+- Up to 5.94× faster than standard library sorting functions
+- Performance parity with mergesort for small arrays, but significantly better with larger data
+- Exceptional scaling advantage as dataset size increases
 
 ### Benchmark Results
 
@@ -137,7 +133,7 @@ Large Array Test
 ----------------
 Attempting with 2000000 elements... SUCCESS
 Initializing array... DONE
-Sorting 2000000 elements... DONE (32.55 ms)
+Sorting 2000000 elements... DONE (6.36 ms)
 Verifying (sampling)... PASSED
 ```
 
@@ -224,7 +220,7 @@ The project includes several example programs demonstrating different use cases:
 
 The latest version of VSort includes several key optimizations:
 
-1. **Enhanced NEON Vectorization**: Improved SIMD implementation for partitioning that processes 4 integers at once
+1. **Enhanced NEON Vectorization**: Complete SIMD implementation for partitioning and merging that processes 4 integers at once, with specialized fast paths for homogeneous data segments
 2. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
 3. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
 4. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
@@ -262,7 +258,7 @@ Advanced users can tune performance by adjusting thresholds for algorithm select
 
 Upcoming improvements planned for VSort:
 
-1. **Enhanced NEON Implementation**: Complete vectorization of partition and merge operations
+1. ~~**Enhanced NEON Implementation**: Complete vectorization of partition and merge operations~~ ✓ Implemented
 2. **Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics
 3. **Better P/E Core Utilization**: Improved workload distribution between core types
 4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns

@@ -261,13 +261,130 @@ void vsort_partition(int *arr, int size)
     // Use 128-bit NEON registers to process 4 integers at once
     if (size >= 8)
     {
-        // Vectorized partition implementation using NEON intrinsics
-        // Example NEON code - either use pivot_vec or remove it to fix warning
-#if 0
-        int32x4_t pivot_vec = vdupq_n_s32(arr[size / 2]);
-        // Process elements in blocks of 4
-        // Placeholder for NEON implementation
-#endif
+        // Choose pivot (median of first, middle, last)
+        int first = arr[0];
+        int middle = arr[size / 2];
+        int last = arr[size - 1];
+
+        // Simple median of three
+        int pivot;
+        if (first <= middle)
+        {
+            if (middle <= last)
+            {
+                pivot = middle;
+            }
+            else if (first <= last)
+            {
+                pivot = last;
+            }
+            else
+            {
+                pivot = first;
+            }
+        }
+        else
+        {
+            if (first <= last)
+            {
+                pivot = first;
+            }
+            else if (middle <= last)
+            {
+                pivot = last;
+            }
+            else
+            {
+                pivot = middle;
+            }
+        }
+
+        // Create vector with pivot replicated in all lanes
+        int32x4_t pivot_vec = vdupq_n_s32(pivot);
+
+        // We'll process in chunks of 4 elements
+        int vec_size = size - (size % 4);
+        int i = 0;
+        int j = vec_size - 4;
+
+        // Vectorized partitioning main loop
+        while (i < j)
+        {
+            // Process from left
+            while (i < j)
+            {
+                int32x4_t data_vec = vld1q_s32(&arr[i]);
+                uint32x4_t cmp = vcgtq_s32(data_vec, pivot_vec);
+                // Check if any element is greater than pivot
+                uint64x2_t cmp_merged = vreinterpretq_u64_u32(cmp);
+                uint64_t cmp_result = vgetq_lane_u64(cmp_merged, 0) | vgetq_lane_u64(cmp_merged, 1);
+                if (cmp_result != 0)
+                {
+                    break;
+                }
+                i += 4;
+            }
+
+            // Process from right
+            while (i < j)
+            {
+                int32x4_t data_vec = vld1q_s32(&arr[j]);
+                uint32x4_t cmp = vcleq_s32(data_vec, pivot_vec);
+                // Check if any element is less than or equal to pivot
+                uint64x2_t cmp_merged = vreinterpretq_u64_u32(cmp);
+                uint64_t cmp_result = vgetq_lane_u64(cmp_merged, 0) | vgetq_lane_u64(cmp_merged, 1);
+                if (cmp_result != 0)
+                {
+                    break;
+                }
+                j -= 4;
+            }
+
+            // Swap vectors if needed
+            if (i < j)
+            {
+                // Load vectors
+                int32x4_t left_vec = vld1q_s32(&arr[i]);
+                int32x4_t right_vec = vld1q_s32(&arr[j]);
+
+                // Store swapped
+                vst1q_s32(&arr[i], right_vec);
+                vst1q_s32(&arr[j], left_vec);
+
+                i += 4;
+                j -= 4;
+            }
+        }
+
+        // Handle remaining elements with scalar code
+        i = i - (i % 4);
+        j = size - 1;
+
+        // Scalar partition for remaining elements
+        int pivot_idx = i;
+        for (int k = i; k <= j; k++)
+        {
+            if (arr[k] <= pivot)
+            {
+                // Swap elements
+                int temp = arr[pivot_idx];
+                arr[pivot_idx] = arr[k];
+                arr[k] = temp;
+                pivot_idx++;
+            }
+        }
+
+        // Recurse on both partitions
+        if (pivot_idx > 1)
+        {
+            quicksort(arr, 0, pivot_idx - 1);
+        }
+        if (pivot_idx < size - 1)
+        {
+            quicksort(arr, pivot_idx, size - 1);
+        }
+
+        return;
     }
 #endif
     // Fall back to standard partition implementation
@@ -345,29 +462,108 @@ void parallel_merge(int arr[], int temp[], int left, int mid, int right, int thr
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
     // Use NEON vectorization for merge when possible
-    if (mid - left >= 4 && right - mid >= 4)
+    while (i + 3 <= mid && j + 3 <= right)
     {
-        // Process 4 elements at a time using NEON when there are enough elements
-        while (i + 3 <= mid && j + 3 <= right)
+        // Determine which array has smaller elements to process in vector
+        if (temp[i] <= temp[j])
         {
-            // Load 4 elements from each subarray
-            int32x4_t left_vec = vld1q_s32(temp + i);
-            int32x4_t right_vec = vld1q_s32(temp + j);
+            // Load 4 elements from left array
+            int32x4_t left_vec = vld1q_s32(&temp[i]);
 
-            // Compare vectors
-            uint32x4_t cmp = vcltq_s32(left_vec, right_vec);
-
-            // Based on comparison, take minimum from each subarray
-            if (vgetq_lane_u32(cmp, 0))
+            // Check if all 4 elements from left are <= first element of right
+            if (vgetq_lane_s32(left_vec, 3) <= temp[j])
             {
-                arr[k++] = temp[i++];
+                // Fast path: all left elements are smaller
+                vst1q_s32(&arr[k], left_vec);
+                i += 4;
+                k += 4;
             }
             else
             {
-                arr[k++] = temp[j++];
+                // Mixed case: need to compare element by element
+                for (int l = 0; l < 4 && i <= mid; l++)
+                {
+                    if (i <= mid && j <= right)
+                    {
+                        if (temp[i] <= temp[j])
+                        {
+                            arr[k++] = temp[i++];
+                        }
+                        else
+                        {
+                            arr[k++] = temp[j++];
+                        }
+                    }
+                }
             }
+        }
+        else
+        {
+            // Load 4 elements from right array
+            int32x4_t right_vec = vld1q_s32(&temp[j]);
 
-            // Continue with scalar code for remaining elements
+            // Check if all 4 elements from right are < first element of left
+            if (vgetq_lane_s32(right_vec, 3) < temp[i])
+            {
+                // Fast path: all right elements are smaller
+                vst1q_s32(&arr[k], right_vec);
+                j += 4;
+                k += 4;
+            }
+            else
+            {
+                // Mixed case: need to compare element by element
+                for (int l = 0; l < 4 && j <= right; l++)
+                {
+                    if (i <= mid && j <= right)
+                    {
+                        if (temp[i] <= temp[j])
+                        {
+                            arr[k++] = temp[i++];
+                        }
+                        else
+                        {
+                            arr[k++] = temp[j++];
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Handle case when one array still has multiple elements and the other is almost empty
+    if (i + 3 <= mid)
+    {
+        while (i + 3 <= mid)
+        {
+            // Check if remaining left elements are all smaller than next right element (or right array is exhausted)
+            if (j > right || temp[i + 3] <= temp[j])
+            {
+                // Load and store 4 elements from left array
+                int32x4_t left_vec = vld1q_s32(&temp[i]);
+                vst1q_s32(&arr[k], left_vec);
+                i += 4;
+                k += 4;
+            }
+            else
+                break;
+        }
+    }
+    else if (j + 3 <= right)
+    {
+        while (j + 3 <= right)
+        {
+            // Check if remaining right elements are all smaller than next left element (or left array is exhausted)
+            if (i > mid || temp[j + 3] < temp[i])
+            {
+                // Load and store 4 elements from right array
+                int32x4_t right_vec = vld1q_s32(&temp[j]);
+                vst1q_s32(&arr[k], right_vec);
+                j += 4;
+                k += 4;
+            }
+            else
+                break;
         }
     }
 #endif

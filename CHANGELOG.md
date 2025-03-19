@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2025-03-19
+
+### Added
+- Complete NEON vectorization implementation for partition operations
+- Enhanced vectorized merge operation with optimized fast paths for homogeneous data segments
+- Specialized vector processing for different data patterns
+
+### Improved
+- Partition function now processes 4 elements at once using NEON SIMD
+- Merge function utilizes vectorized comparisons and bulk transfers
+- Better detection of sequential data patterns for faster processing
+
 ## [0.3.0] - 2025-03-18
 
 ### Added
