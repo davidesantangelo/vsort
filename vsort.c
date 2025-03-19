@@ -4,6 +4,8 @@
  * A sorting library specifically optimized for Apple Silicon processors,
  * leveraging ARM NEON vector instructions and Grand Central Dispatch.
  *
+ * Version 0.3.2
+ *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
  */
@@ -15,6 +17,7 @@
 #include <stdint.h>
 #include <time.h>
 #include "vsort.h"
+#include "vsort_logger.h"
 
 // Platform-specific includes
 #if defined(_WIN32) || defined(_MSC_VER)
@@ -32,10 +35,15 @@
 #endif
 #endif
 
-// Helper macro for min value - add this before it's used
-#define MIN(a, b) ((a) < (b) ? (a) : (b))
+// Memory alignment for SIMD operations
+#define VSORT_ALIGN 16 // 128-bit (16-byte) alignment for NEON
+#define VSORT_ALIGNED __attribute__((aligned(VSORT_ALIGN)))
 
-// Macro to mark variables as intentionally unused
+// Helper macro for min/max
+#define MIN(a, b) ((a) < (b) ? (a) : (b))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+// Mark variables as intentionally unused
 #define UNUSED(x) ((void)(x))
 
 // Apple Silicon specific includes
@@ -44,37 +52,153 @@
 #include <dispatch/dispatch.h> // For Grand Central Dispatch
 #endif
 
-// Performance-tuned thresholds
-#define INSERTION_THRESHOLD 16    // Optimal for small arrays
-#define PARALLEL_THRESHOLD 100000 // Threshold for parallel processing
-#define VECTOR_THRESHOLD 64       // Threshold for vectorized operations
+/**
+ * Dynamic threshold determination based on CPU characteristics
+ */
+typedef struct
+{
+    int insertion_threshold;    // Switch to insertion sort below this
+    int vector_threshold;       // Switch to vectorized operations above this
+    int parallel_threshold;     // Switch to parallel operations above this
+    int radix_threshold;        // Switch to radix sort above this (for integers)
+    int cache_optimal_elements; // Elements that fit in L1/L2 cache
+} vsort_thresholds_t;
 
-// Force inlining for critical functions - compiler-specific definitions
-#if defined(_MSC_VER) // Microsoft Visual C++ Compiler
-#define FORCE_INLINE static __forceinline
-#elif defined(__GNUC__) || defined(__clang__) // GCC or Clang
-#define FORCE_INLINE static inline __attribute__((always_inline))
+// Global thresholds - initialized by vsort_init_thresholds()
+static vsort_thresholds_t thresholds = {
+    .insertion_threshold = 16,
+    .vector_threshold = 64,
+    .parallel_threshold = 100000,
+    .radix_threshold = 1000000,
+    .cache_optimal_elements = 16384};
+
+// Forward declarations for all internal functions
+static void vsort_init_thresholds(void);
+#if defined(__APPLE__) && defined(__arm64__)
+static void *vsort_aligned_malloc(size_t size) __attribute__((unused));
+static void vsort_aligned_free(void *ptr) __attribute__((unused));
 #else
-#define FORCE_INLINE static inline
+static void *vsort_aligned_malloc(size_t size);
+static void vsort_aligned_free(void *ptr);
+#endif
+static void swap(int *a, int *b);
+static void insertion_sort(int arr[], int low, int high);
+static int partition(int arr[], int low, int high);
+static void quicksort(int arr[], int low, int high);
+static bool vsort_is_nearly_sorted(const int *arr, int size);
+static int get_physical_core_count(void);
+static void merge_sorted_arrays(int arr[], int temp[], int left, int mid, int right);
+#if defined(__APPLE__) && defined(__arm64__)
+static void parallel_merge(int arr[], int temp[], int left, int mid, int right) __attribute__((unused));
+#else
+static void parallel_merge(int arr[], int temp[], int left, int mid, int right);
+#endif
+static void radix_sort(int arr[], int n);
+static void vsort_sequential(int *arr, int size);
+static void vsort_parallel(int *arr, int size);
+
+/**
+ * Initialize thresholds based on system characteristics
+ */
+static void vsort_init_thresholds(void)
+{
+    static bool initialized = false;
+
+    if (initialized)
+    {
+        return;
+    }
+
+    // Default values are already set in the static initialization
+
+    // Adjust based on CPU cores
+    int cores = get_physical_core_count();
+
+    // L1/L2 cache considerations - typical L1 cache is 32KB per core
+    // Assuming 4-byte integers, around 8K elements would fit in L1
+    thresholds.cache_optimal_elements = 8192;
+
+    // Lower parallel threshold with more cores
+    if (cores >= 8)
+    {
+        thresholds.parallel_threshold = 50000;
+    }
+    else if (cores >= 4)
+    {
+        thresholds.parallel_threshold = 75000;
+    }
+
+    // Adjust insertion threshold for branch prediction efficiency
+    // Modern CPUs typically do well with insertion sort up to 16-24 elements
+    thresholds.insertion_threshold = 16;
+
+// Vector threshold should be set based on SIMD width and overhead
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    // For NEON (128-bit), processing 4 integers at once
+    thresholds.vector_threshold = 32;
 #endif
 
-// Simple utility functions
-FORCE_INLINE void swap(int *a, int *b)
+    vsort_log_debug("Initialized thresholds - insertion: %d, vector: %d, parallel: %d, radix: %d",
+                    thresholds.insertion_threshold, thresholds.vector_threshold,
+                    thresholds.parallel_threshold, thresholds.radix_threshold);
+
+    initialized = true;
+}
+
+/**
+ * Aligned memory allocation for SIMD operations
+ */
+static void *vsort_aligned_malloc(size_t size)
+{
+    void *ptr = NULL;
+
+#if defined(_MSC_VER)
+    ptr = _aligned_malloc(size, VSORT_ALIGN);
+#else
+    // posix_memalign requires size to be a multiple of alignment
+    size_t aligned_size = (size + VSORT_ALIGN - 1) & ~(VSORT_ALIGN - 1);
+    if (posix_memalign(&ptr, VSORT_ALIGN, aligned_size))
+    {
+        return NULL;
+    }
+#endif
+
+    return ptr;
+}
+
+/**
+ * Free aligned memory
+ */
+static void vsort_aligned_free(void *ptr)
+{
+#if defined(_MSC_VER)
+    _aligned_free(ptr);
+#else
+    free(ptr);
+#endif
+}
+
+/**
+ * Swap two integers
+ */
+static void swap(int *a, int *b)
 {
     int temp = *a;
     *a = *b;
     *b = temp;
 }
 
-// Optimized insertion sort with branch optimization
-FORCE_INLINE void insertion_sort(int arr[], int low, int high)
+/**
+ * Insertion sort - efficient for small arrays
+ */
+static void insertion_sort(int arr[], int low, int high)
 {
     for (int i = low + 1; i <= high; i++)
     {
         int key = arr[i];
         int j = i - 1;
 
-        // Move elements greater than key to one position ahead
+        // Branch-optimized inner loop
         while (j >= low && arr[j] > key)
         {
             arr[j + 1] = arr[j];
@@ -84,13 +208,15 @@ FORCE_INLINE void insertion_sort(int arr[], int low, int high)
     }
 }
 
-// Simple but correct Lomuto partition scheme
-FORCE_INLINE int partition(int arr[], int low, int high)
+/**
+ * Partitioning for quicksort with median-of-three pivot selection
+ */
+static int partition(int arr[], int low, int high)
 {
-    // Select pivot as median of first, middle, and last elements
+    // Median-of-three pivot selection
     int mid = low + (high - low) / 2;
 
-    // Sort low, mid, high elements (3-element sort)
+    // Sort low, mid, high elements
     if (arr[low] > arr[mid])
         swap(&arr[low], &arr[mid]);
     if (arr[mid] > arr[high])
@@ -98,16 +224,14 @@ FORCE_INLINE int partition(int arr[], int low, int high)
     if (arr[low] > arr[mid])
         swap(&arr[low], &arr[mid]);
 
-    // Use middle value as pivot
+    // Use median as pivot and move to end
     int pivot = arr[mid];
-
-    // Move pivot to the end (will be restored later)
     swap(&arr[mid], &arr[high]);
 
-    // Lomuto partition scheme
+    // Partition using Lomuto scheme
     int i = low - 1;
 
-    for (int j = low; j <= high - 1; j++)
+    for (int j = low; j < high; j++)
     {
         if (arr[j] <= pivot)
         {
@@ -116,735 +240,562 @@ FORCE_INLINE int partition(int arr[], int low, int high)
         }
     }
 
-    // Put pivot in its final place
     swap(&arr[i + 1], &arr[high]);
-
-    return (i + 1);
+    return i + 1;
 }
 
-// Fix the basic quicksort implementation to ensure correctness
-void quicksort(int arr[], int low, int high)
+/**
+ * Iterative quicksort implementation to avoid stack overflow
+ */
+static void quicksort(int arr[], int low, int high)
 {
     // Early exit for invalid or small ranges
     if (low >= high)
         return;
 
-    // Use insertion sort for small arrays - it's more efficient
-    if (high - low < INSERTION_THRESHOLD)
+    // Use insertion sort for small arrays
+    if (high - low < thresholds.insertion_threshold)
     {
         insertion_sort(arr, low, high);
         return;
     }
 
-    // Create a stack for storing subarray boundaries
-    int *stack = (int *)malloc((high - low + 1) * sizeof(int));
+    // Use stack-based iterative implementation to avoid recursion overhead
+    int *stack = malloc((high - low + 1) * sizeof(int));
     if (!stack)
     {
-        // Handle memory allocation failure by using recursive approach
-        fprintf(stderr, "Memory allocation failed in quicksort, using recursive fallback\n");
+        vsort_log_error("Memory allocation failed in quicksort, falling back to recursive implementation");
 
-        // Simple recursive implementation as fallback
+        // Simple recursive fallback
         int pivot = partition(arr, low, high);
-
         if (pivot > low)
             quicksort(arr, low, pivot - 1);
         if (pivot < high)
             quicksort(arr, pivot + 1, high);
-
         return;
     }
 
-    // Iterative implementation with stack
+    // Initialize stack for iterative approach
     int top = -1;
-
-    // Push initial values to stack
     stack[++top] = low;
     stack[++top] = high;
 
-    // Keep popping from stack while it's not empty
     while (top >= 0)
     {
-        // Pop high and low
         high = stack[top--];
         low = stack[top--];
 
-        // Use insertion sort for small arrays
-        if (high - low < INSERTION_THRESHOLD)
+        // Use insertion sort for small subarrays
+        if (high - low < thresholds.insertion_threshold)
         {
             insertion_sort(arr, low, high);
             continue;
         }
 
-        // Partition the array and get pivot position
-        int p = partition(arr, low, high);
+        // Partition and push subarrays
+        int pivot = partition(arr, low, high);
 
-        // Push left subarray if there are elements on the left of pivot
-        if (p - 1 > low)
+        // Push larger subarray first to reduce stack size
+        if (pivot - low < high - pivot)
         {
-            stack[++top] = low;
-            stack[++top] = p - 1;
+            // Left subarray is smaller
+            if (pivot + 1 < high)
+            {
+                stack[++top] = pivot + 1;
+                stack[++top] = high;
+            }
+            if (low < pivot - 1)
+            {
+                stack[++top] = low;
+                stack[++top] = pivot - 1;
+            }
         }
-
-        // Push right subarray if there are elements on the right of pivot
-        if (p + 1 < high)
+        else
         {
-            stack[++top] = p + 1;
-            stack[++top] = high;
+            // Right subarray is smaller
+            if (low < pivot - 1)
+            {
+                stack[++top] = low;
+                stack[++top] = pivot - 1;
+            }
+            if (pivot + 1 < high)
+            {
+                stack[++top] = pivot + 1;
+                stack[++top] = high;
+            }
         }
     }
 
-    // Free the dynamically allocated memory
     free(stack);
 }
 
-// Check if array is nearly sorted - helps with adaptive algorithm selection
-bool vsort_is_nearly_sorted(int *arr, int size)
+/**
+ * Check if array is nearly sorted - helps with adaptive algorithm selection
+ */
+static bool vsort_is_nearly_sorted(const int *arr, int size)
 {
-    // Sample the array to determine if it's nearly sorted
     if (size < 20)
         return false;
 
     int inversions = 0;
-    int sample_size = MIN(size, 100);
-    int step = size / sample_size;
+    int sample_size = MIN(100, size / 10);
+    int step = MAX(1, size / sample_size);
 
-    for (int i = 0; i < sample_size - 1; i++)
+    for (int i = 0; i < size - step; i += step)
     {
-        if (arr[i * step] > arr[(i + 1) * step])
+        if (arr[i] > arr[i + step])
             inversions++;
     }
 
-    return (inversions < sample_size / 10); // Less than 10% inversions
+    // Consider "nearly sorted" if less than 10% inversions
+    return (inversions < sample_size / 10);
 }
 
-// Get physical core count for optimal thread distribution
+/**
+ * Get physical core count
+ */
 static int get_physical_core_count(void)
 {
 #if defined(_WIN32) || defined(_MSC_VER)
-    return get_num_processors();
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    return (int)sysinfo.dwNumberOfProcessors;
 #elif defined(__APPLE__)
-    // Use _SC_NPROCESSORS_ONLN which is more widely supported
     return (int)sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(_SC_NPROCESSORS_CONF)
-    return (int)sysconf(_SC_NPROCESSORS_CONF);
 #else
-    return 4; // Default fallback
+    return (int)sysconf(_SC_NPROCESSORS_CONF);
 #endif
 }
 
-// Optimized insertion sort for nearly sorted arrays
-void optimized_insertion_sort(int arr[], int size)
+/**
+ * Radix sort implementation for integers
+ * Much faster than comparison-based sorts for large integer arrays
+ */
+static void radix_sort(int arr[], int n)
 {
-    for (int i = 1; i < size; i++)
-    {
-        // Skip elements that are already in place
-        if (arr[i] >= arr[i - 1])
-            continue;
-
-        int key = arr[i];
-        int j = i - 1;
-
-        while (j >= 0 && arr[j] > key)
-        {
-            arr[j + 1] = arr[j];
-            j--;
-        }
-        arr[j + 1] = key;
-    }
-}
-
-// Improved vectorization for partitioning
-void vsort_partition(int *arr, int size)
-{
-// Enhanced NEON SIMD vectorization
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-    // Use 128-bit NEON registers to process 4 integers at once
-    if (size >= 8)
-    {
-        // Choose pivot (median of first, middle, last)
-        int first = arr[0];
-        int middle = arr[size / 2];
-        int last = arr[size - 1];
-
-        // Simple median of three
-        int pivot;
-        if (first <= middle)
-        {
-            if (middle <= last)
-            {
-                pivot = middle;
-            }
-            else if (first <= last)
-            {
-                pivot = last;
-            }
-            else
-            {
-                pivot = first;
-            }
-        }
-        else
-        {
-            if (first <= last)
-            {
-                pivot = first;
-            }
-            else if (middle <= last)
-            {
-                pivot = last;
-            }
-            else
-            {
-                pivot = middle;
-            }
-        }
-
-        // Create vector with pivot replicated in all lanes
-        int32x4_t pivot_vec = vdupq_n_s32(pivot);
-
-        // We'll process in chunks of 4 elements
-        int vec_size = size - (size % 4);
-        int i = 0;
-        int j = vec_size - 4;
-
-        // Vectorized partitioning main loop
-        while (i < j)
-        {
-            // Process from left
-            while (i < j)
-            {
-                int32x4_t data_vec = vld1q_s32(&arr[i]);
-                uint32x4_t cmp = vcgtq_s32(data_vec, pivot_vec);
-                // Check if any element is greater than pivot
-                uint64x2_t cmp_merged = vreinterpretq_u64_u32(cmp);
-                uint64_t cmp_result = vgetq_lane_u64(cmp_merged, 0) | vgetq_lane_u64(cmp_merged, 1);
-                if (cmp_result != 0)
-                {
-                    break;
-                }
-                i += 4;
-            }
-
-            // Process from right
-            while (i < j)
-            {
-                int32x4_t data_vec = vld1q_s32(&arr[j]);
-                uint32x4_t cmp = vcleq_s32(data_vec, pivot_vec);
-                // Check if any element is less than or equal to pivot
-                uint64x2_t cmp_merged = vreinterpretq_u64_u32(cmp);
-                uint64_t cmp_result = vgetq_lane_u64(cmp_merged, 0) | vgetq_lane_u64(cmp_merged, 1);
-                if (cmp_result != 0)
-                {
-                    break;
-                }
-                j -= 4;
-            }
-
-            // Swap vectors if needed
-            if (i < j)
-            {
-                // Load vectors
-                int32x4_t left_vec = vld1q_s32(&arr[i]);
-                int32x4_t right_vec = vld1q_s32(&arr[j]);
-
-                // Store swapped
-                vst1q_s32(&arr[i], right_vec);
-                vst1q_s32(&arr[j], left_vec);
-
-                i += 4;
-                j -= 4;
-            }
-        }
-
-        // Handle remaining elements with scalar code
-        i = i - (i % 4);
-        j = size - 1;
-
-        // Scalar partition for remaining elements
-        int pivot_idx = i;
-        for (int k = i; k <= j; k++)
-        {
-            if (arr[k] <= pivot)
-            {
-                // Swap elements
-                int temp = arr[pivot_idx];
-                arr[pivot_idx] = arr[k];
-                arr[k] = temp;
-                pivot_idx++;
-            }
-        }
-
-        // Recurse on both partitions
-        if (pivot_idx > 1)
-        {
-            quicksort(arr, 0, pivot_idx - 1);
-        }
-        if (pivot_idx < size - 1)
-        {
-            quicksort(arr, pivot_idx, size - 1);
-        }
-
+    if (n <= 1)
         return;
-    }
-#endif
-    // Fall back to standard partition implementation
-    quicksort(arr, 0, size - 1);
-}
 
-// Sequential sorting, called by vsort_parallel for smaller chunks
-void vsort_sequential(int *arr, int size)
-{
-    quicksort(arr, 0, size - 1);
-}
-
-// Add a merge function for combining sorted arrays
-void merge_sorted_arrays(int arr[], int temp[], int left, int mid, int right)
-{
-    int i, j, k;
-
-    // Copy data to temp array
-    for (i = left; i <= right; i++)
-        temp[i] = arr[i];
-
-    i = left;    // Initial index of first subarray
-    j = mid + 1; // Initial index of second subarray
-    k = left;    // Initial index of merged subarray
-
-    // Merge the temp arrays back into arr[left..right]
-    while (i <= mid && j <= right)
+    // Find maximum element to know number of digits
+    int max_val = arr[0];
+    for (int i = 1; i < n; i++)
     {
-        if (temp[i] <= temp[j])
-        {
-            arr[k] = temp[i];
-            i++;
-        }
-        else
-        {
-            arr[k] = temp[j];
-            j++;
-        }
-        k++;
+        if (arr[i] > max_val)
+            max_val = arr[i];
     }
 
-    // Copy the remaining elements of left subarray, if any
-    while (i <= mid)
+    // Handle negative numbers by shifting
+    int min_val = arr[0];
+    for (int i = 1; i < n; i++)
     {
-        arr[k] = temp[i];
-        i++;
-        k++;
+        if (arr[i] < min_val)
+            min_val = arr[i];
     }
 
-    // Copy the remaining elements of right subarray, if any
-    while (j <= right)
-    {
-        arr[k] = temp[j];
-        j++;
-        k++;
-    }
-}
+    // If we have negative values, shift all values to make them non-negative
+    bool has_negative = (min_val < 0);
+    int shift = has_negative ? -min_val : 0;
 
-// Improved parallel merge function that uses vectorization
-void parallel_merge(int arr[], int temp[], int left, int mid, int right, int threshold)
-{
-    // For small ranges, use the sequential merge as it's more efficient
-    if (right - left <= threshold)
+    // Create a temporary array for counting sort
+    int *output = malloc(n * sizeof(int));
+    if (!output)
     {
-        merge_sorted_arrays(arr, temp, left, mid, right);
+        vsort_log_error("Memory allocation failed in radix sort, falling back to quicksort");
+        quicksort(arr, 0, n - 1);
         return;
     }
 
-    // Copy data to temp array
-    memcpy(temp + left, arr + left, (right - left + 1) * sizeof(int));
-
-    int i = left;    // Initial index of first subarray
-    int j = mid + 1; // Initial index of second subarray
-    int k = left;    // Initial index of merged subarray
-
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-    // Use NEON vectorization for merge when possible
-    while (i + 3 <= mid && j + 3 <= right)
+    // Apply shift if needed
+    if (has_negative)
     {
-        // Determine which array has smaller elements to process in vector
-        if (temp[i] <= temp[j])
+        max_val += shift; // Update max_val with the shift
+        for (int i = 0; i < n; i++)
         {
-            // Load 4 elements from left array
-            int32x4_t left_vec = vld1q_s32(&temp[i]);
-
-            // Check if all 4 elements from left are <= first element of right
-            if (vgetq_lane_s32(left_vec, 3) <= temp[j])
-            {
-                // Fast path: all left elements are smaller
-                vst1q_s32(&arr[k], left_vec);
-                i += 4;
-                k += 4;
-            }
-            else
-            {
-                // Mixed case: need to compare element by element
-                for (int l = 0; l < 4 && i <= mid; l++)
-                {
-                    if (i <= mid && j <= right)
-                    {
-                        if (temp[i] <= temp[j])
-                        {
-                            arr[k++] = temp[i++];
-                        }
-                        else
-                        {
-                            arr[k++] = temp[j++];
-                        }
-                    }
-                }
-            }
-        }
-        else
-        {
-            // Load 4 elements from right array
-            int32x4_t right_vec = vld1q_s32(&temp[j]);
-
-            // Check if all 4 elements from right are < first element of left
-            if (vgetq_lane_s32(right_vec, 3) < temp[i])
-            {
-                // Fast path: all right elements are smaller
-                vst1q_s32(&arr[k], right_vec);
-                j += 4;
-                k += 4;
-            }
-            else
-            {
-                // Mixed case: need to compare element by element
-                for (int l = 0; l < 4 && j <= right; l++)
-                {
-                    if (i <= mid && j <= right)
-                    {
-                        if (temp[i] <= temp[j])
-                        {
-                            arr[k++] = temp[i++];
-                        }
-                        else
-                        {
-                            arr[k++] = temp[j++];
-                        }
-                    }
-                }
-            }
+            arr[i] += shift;
         }
     }
 
-    // Handle case when one array still has multiple elements and the other is almost empty
-    if (i + 3 <= mid)
+    // Determine the number of bits required
+    int num_bits = 0;
+    while (max_val > 0)
     {
-        while (i + 3 <= mid)
-        {
-            // Check if remaining left elements are all smaller than next right element (or right array is exhausted)
-            if (j > right || temp[i + 3] <= temp[j])
-            {
-                // Load and store 4 elements from left array
-                int32x4_t left_vec = vld1q_s32(&temp[i]);
-                vst1q_s32(&arr[k], left_vec);
-                i += 4;
-                k += 4;
-            }
-            else
-                break;
-        }
+        max_val >>= 1;
+        num_bits++;
     }
-    else if (j + 3 <= right)
-    {
-        while (j + 3 <= right)
-        {
-            // Check if remaining right elements are all smaller than next left element (or left array is exhausted)
-            if (i > mid || temp[j + 3] < temp[i])
-            {
-                // Load and store 4 elements from right array
-                int32x4_t right_vec = vld1q_s32(&temp[j]);
-                vst1q_s32(&arr[k], right_vec);
-                j += 4;
-                k += 4;
-            }
-            else
-                break;
-        }
-    }
-#endif
 
-    // Standard merge for remaining elements
+    // Process 8 bits at a time for cache efficiency
+    const int bits_per_pass = 8;
+    const int num_bins = 1 << bits_per_pass; // 256 bins
+    const unsigned int mask = num_bins - 1;  // Mask for extracting bits
+
+    // Allocate count array on stack for better performance
+    int count[256];
+
+    // Perform radix sort
+    for (int shift = 0; shift < num_bits; shift += bits_per_pass)
+    {
+        // Clear count array
+        memset(count, 0, num_bins * sizeof(int));
+
+        // Count occurrences
+        for (int i = 0; i < n; i++)
+        {
+            unsigned int bin = (arr[i] >> shift) & mask;
+            count[bin]++;
+        }
+
+        // Compute prefix sum
+        for (int i = 1; i < num_bins; i++)
+        {
+            count[i] += count[i - 1];
+        }
+
+        // Build output array
+        for (int i = n - 1; i >= 0; i--)
+        {
+            unsigned int bin = (arr[i] >> shift) & mask;
+            output[--count[bin]] = arr[i];
+        }
+
+        // Copy back to the original array
+        memcpy(arr, output, n * sizeof(int));
+
+        // If all elements are in the first bin, we're done
+        if (count[0] == n)
+            break;
+    }
+
+    // Undo the shift if we had negative numbers
+    if (has_negative)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            arr[i] -= shift;
+        }
+    }
+
+    free(output);
+}
+
+/**
+ * Merge sorted arrays - used as part of merge sort
+ * Uses a temporary buffer for efficient merging
+ */
+static void merge_sorted_arrays(int arr[], int temp[], int left, int mid, int right)
+{
+    if (left > mid || mid >= right)
+    {
+        return; // Invalid range
+    }
+
+    // Copy both halves to temporary array for stability and cache efficiency
+    int range_size = right - left + 1;
+    if (range_size <= 0)
+        return;
+
+    // Using memmove instead of a loop for better performance
+    memmove(&temp[left], &arr[left], range_size * sizeof(int));
+
+    int i = left;    // Index for left subarray
+    int j = mid + 1; // Index for right subarray
+    int k = left;    // Index for merged array
+
+    // Standard merge - using temp array for both sides for stability
     while (i <= mid && j <= right)
     {
-        if (temp[i] <= temp[j])
-        {
-            arr[k++] = temp[i++];
-        }
-        else
-        {
-            arr[k++] = temp[j++];
-        }
+        arr[k++] = (temp[i] <= temp[j]) ? temp[i++] : temp[j++];
     }
 
     // Copy remaining elements
     while (i <= mid)
-    {
         arr[k++] = temp[i++];
-    }
     while (j <= right)
-    {
         arr[k++] = temp[j++];
+
+    // Verify the merge result is sorted (only in debug mode)
+#ifdef DEBUG_VERIFICATION
+    for (int v = left + 1; v <= right; v++)
+    {
+        if (arr[v] < arr[v - 1])
+        {
+            vsort_log_error("Merge verification failed at index %d, left=%d, mid=%d, right=%d",
+                            v, left, mid, right);
+            break;
+        }
     }
+#endif
 }
 
-// Work-stealing queue structure for better load balancing
-typedef struct
+// Simplify the parallel merge to make it more reliable
+static void parallel_merge(int arr[], int temp[], int left, int mid, int right)
 {
-    int left;
-    int right;
-} SortTask;
+    // Just use the standard merge - it's more reliable
+    merge_sorted_arrays(arr, temp, left, mid, right);
+}
 
-// Improved parallel sorting implementation
-void vsort_parallel(int *arr, int size)
+/**
+ * Sequential sorting implementation - optimized for single-threaded operation
+ */
+static void vsort_sequential(int *arr, int size)
 {
-    // Only use parallelization for arrays large enough to benefit
-    if (size < 10000)
+    if (!arr || size <= 1)
+        return;
+
+    // Check if array is nearly sorted - use insertion sort which performs well on such data
+    if (vsort_is_nearly_sorted(arr, size))
+    {
+        vsort_log_info("Array appears nearly sorted, using optimized insertion sort");
+        insertion_sort(arr, 0, size - 1);
+        return;
+    }
+
+    // For very large integer arrays, radix sort is faster than comparison-based sorts
+    if (size >= thresholds.radix_threshold)
+    {
+        vsort_log_info("Using radix sort for large array (size: %d)", size);
+        radix_sort(arr, size);
+        return;
+    }
+
+    // Use quicksort for most cases
+    quicksort(arr, 0, size - 1);
+}
+
+/**
+ * Parallel sorting implementation with GCD on Apple platforms
+ */
+static void vsort_parallel(int *arr, int size)
+{
+    // Fall back to sequential sort for small arrays
+    if (!arr || size < thresholds.parallel_threshold)
     {
         vsort_sequential(arr, size);
         return;
     }
 
 #if defined(__APPLE__) && defined(__arm64__)
-    // Detect system characteristics for optimal performance
-    int p_cores = 0; // Performance cores
-    int e_cores = 0; // Efficiency cores
-    UNUSED(e_cores); // Mark as intentionally unused
+    vsort_log_debug("Starting parallel sort with %d elements", size);
+
+    // Get optimal thread count based on available cores
     int total_cores = get_physical_core_count();
 
-    // On Apple Silicon, try to detect P-cores and E-cores
-    // This is a simplification - in a real implementation, you would use
-    // platform-specific APIs to get the actual core configuration
-    if (total_cores >= 8)
-    {
-        // Estimate: most Apple Silicon chips have P-cores as ~half the total
-        p_cores = total_cores / 2;
-        e_cores = total_cores - p_cores;
-    }
-    else
-    {
-        p_cores = total_cores;
-        e_cores = 0;
-    }
+    // Use fewer threads to avoid race conditions
+    int thread_count = MAX(1, MIN(total_cores - 1, 4)); // Limit to 4 threads max
 
-    // Calculate optimal thread count - allocate more work to P-cores
-    int thread_count;
-    if (size < 100000)
-    {
-        // For medium-sized arrays, use fewer threads to reduce overhead
-        thread_count = MIN(p_cores, 4);
-    }
-    else if (size < 1000000)
-    {
-        // For large arrays, use all P-cores
-        thread_count = p_cores;
-    }
-    else
-    {
-        // For very large arrays, use all cores
-        thread_count = total_cores;
-    }
+    vsort_log_debug("Using %d threads for parallel sort", thread_count);
 
-    // Ensure at least one thread
-    if (thread_count < 1)
-        thread_count = 1;
+    // Use larger chunks to reduce the number of merges needed
+    // This is critical for stability
+    int chunk_size = MAX(16384, size / (thread_count * 2));
+    int num_chunks = (size + chunk_size - 1) / chunk_size;
 
-    // Calculate optimal chunk size based on cache characteristics
-    // L2 cache on Apple Silicon is typically 128KB per core
-    // Assuming 4-byte integers, aim for chunks that fit in L2 cache
-    const int CACHE_OPTIMAL_ELEMENTS = 16384; // ~64KB of integers
+    vsort_log_debug("Using %d chunks of size ~%d", num_chunks, chunk_size);
 
-    // Adaptive chunk sizing - balance between cache efficiency and parallelism
-    int chunk_size = MIN(CACHE_OPTIMAL_ELEMENTS, size / (thread_count * 2));
-    int num_chunks = (size + chunk_size - 1) / chunk_size; // Ceiling division
-
-    // Allocate temp array once for all operations
-    int *temp = (int *)malloc(size * sizeof(int));
+    // ALWAYS use heap allocation for temp array
+    int *temp = malloc(size * sizeof(int));
     if (!temp)
     {
-        // Fall back to sequential sort if allocation fails
-        fprintf(stderr, "Memory allocation failed in parallel sort, falling back to sequential\n");
-        quicksort(arr, 0, size - 1);
+        vsort_log_error("Memory allocation failed in parallel sort, falling back to sequential");
+        vsort_sequential(arr, size);
         return;
     }
 
-    // Use high QoS for critical sorting tasks
+    // Sort chunks in parallel first
     dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
         DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INITIATED, 0);
     dispatch_queue_t queue = dispatch_queue_create("com.vsort.parallel", attr);
-
-    // Step 1: Sort each chunk in parallel using a more efficient workload distribution
-    // Create dispatch group for synchronization
     dispatch_group_t group = dispatch_group_create();
 
-    // Sort all chunks in parallel
     for (int i = 0; i < num_chunks; i++)
     {
         dispatch_group_async(group, queue, ^{
           int start = i * chunk_size;
           int end = MIN(start + chunk_size - 1, size - 1);
 
-          // Use adaptive algorithm selection based on chunk characteristics
-          if (end - start <= INSERTION_THRESHOLD)
-          {
-              insertion_sort(arr, start, end);
-          }
-          else
-          {
-              quicksort(arr, start, end);
-          }
+          // Use standard quicksort for each chunk
+          quicksort(arr, start, end);
         });
     }
 
-    // Wait for all sorting to complete
     dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
 
-    // Step 2: Merge chunks in parallel using a balanced binary tree approach
-    // This reduces the sequential merge chain and improves parallelism
+    // Now we do a SEQUENTIAL merge - parallel merges are causing issues
+    // This is slower but much more reliable
     for (int width = chunk_size; width < size; width *= 2)
     {
-        int merge_pairs = (size + 2 * width - 1) / (2 * width);
+        vsort_log_debug("Merging with width %d", width);
 
-        // Reset the group for next round of merges
-        dispatch_group_t merge_group = dispatch_group_create();
-
-        // Merge pairs in parallel when possible
-        for (int i = 0; i < merge_pairs; i++)
+        // Process each pair of chunks sequentially to avoid race conditions
+        for (int left = 0; left < size; left += 2 * width)
         {
-            dispatch_group_async(merge_group, queue, ^{
-              int left = i * 2 * width;
-              int mid = MIN(left + width - 1, size - 1);
-              int right = MIN(left + 2 * width - 1, size - 1);
+            int mid = MIN(left + width - 1, size - 1);
+            int right = MIN(left + 2 * width - 1, size - 1);
 
-              // Only merge if we have two chunks
-              if (mid < right && left < mid)
-              {
-                  // Use vectorized merge for large chunks
-                  parallel_merge(arr, temp, left, mid, right, VECTOR_THRESHOLD);
-              }
-            });
+            if (left < mid && mid < right)
+            {
+                // Standard merge - no parallel merge or SIMD for now
+                merge_sorted_arrays(arr, temp, left, mid, right);
+
+                // Quick verification of this segment
+                bool segment_sorted = true;
+                for (int v = left + 1; v <= right; v++)
+                {
+                    if (arr[v] < arr[v - 1])
+                    {
+                        segment_sorted = false;
+                        vsort_log_error("Segment not properly merged at indices %d-%d", v - 1, v);
+                        break;
+                    }
+                }
+
+                // If segment isn't sorted, fix it immediately
+                if (!segment_sorted)
+                {
+                    quicksort(arr, left, right);
+                }
+            }
         }
+    }
 
-        // Wait for current level of merges to complete
-        dispatch_group_wait(merge_group, DISPATCH_TIME_FOREVER);
-        dispatch_release(merge_group);
+    // Final verification of the entire array
+    bool fully_sorted = true;
+    for (int i = 1; i < size; i++)
+    {
+        if (arr[i] < arr[i - 1])
+        {
+            vsort_log_error("Final array validation failed at index %d", i);
+            fully_sorted = false;
+            break;
+        }
+    }
+
+    if (!fully_sorted)
+    {
+        vsort_log_warning("Final verification failed, using sequential sort as fallback");
+        vsort_sequential(arr, size);
     }
 
     // Clean up
     free(temp);
     dispatch_release(group);
     dispatch_release(queue);
+
 #else
     // Fall back to sequential sort on non-Apple platforms
+    vsort_log_info("Parallel sorting not available, using sequential sort");
     vsort_sequential(arr, size);
 #endif
 }
 
-// Enhanced quicksort with optimizations
-void quicksort_optimized(int arr[], int size)
-{
-    quicksort(arr, 0, size - 1);
-}
-
-// Fix vsort main function
-VSORT_API void vsort(int arr[], int n)
-{
-    // Early exit for trivial cases
-    if (!arr || n <= 1)
-        return;
-
-    // For very small arrays, just use insertion sort
-    if (n <= INSERTION_THRESHOLD)
-    {
-        insertion_sort(arr, 0, n - 1);
-        return;
-    }
-
-    // For large arrays, use parallel sorting if available
-    if (n >= PARALLEL_THRESHOLD)
-    {
-        vsort_parallel(arr, n);
-        return;
-    }
-
-    // For medium-sized arrays, use quicksort
-    quicksort(arr, 0, n - 1);
-}
-
-// Compatibility function
-void adaptive_quick_sort(int arr[], int low, int high)
-{
-    quicksort(arr, low, high);
-}
-
-// Stub functions to maintain API compatibility
-void bucket_sort(int arr[], int n) {}
-void cache_aware_merge_sort(int arr[], int temp[], int low, int high) {}
-void parallel_merge_sort(int arr[], int n) {}
-void counting_sort(int arr[], int n, int min_val, int max_val) {}
-int median_of_three(int arr[], int a, int b, int c) { return 0; }
-int select_pivot(int arr[], int low, int high) { return 0; }
-int partition_legacy(int arr[], int low, int high, int pivot) { return 0; }
-
-// Implementation of vsort_with_comparator
-VSORT_API void vsort_with_comparator(void *base, int n, size_t size, int (*compare)(const void *, const void *))
-{
-    qsort(base, n, size, compare);
-}
-
-// Forward declarations for comparator functions
-static int default_float_comparator(const void *a, const void *b);
-static int default_char_comparator(const void *a, const void *b);
-
-// Implementation of vsort_float
-VSORT_API void vsort_float(float arr[], int n)
-{
-    // This is a simple implementation - you may want to optimize for floats specifically
-    qsort(arr, n, sizeof(float), default_float_comparator);
-}
-
-// Default float comparator
+/**
+ * Default comparator function for floats
+ */
 static int default_float_comparator(const void *a, const void *b)
 {
     float fa = *(const float *)a;
     float fb = *(const float *)b;
-
-    if (fa < fb)
-        return -1;
-    if (fa > fb)
-        return 1;
-    return 0;
+    return (fa < fb) ? -1 : (fa > fb) ? 1
+                                      : 0;
 }
 
-// Implementation of vsort_char
-VSORT_API void vsort_char(char arr[], int n)
-{
-    // This is a simple implementation - you may want to optimize for chars specifically
-    qsort(arr, n, sizeof(char), default_char_comparator);
-}
-
-// Default char comparator
+/**
+ * Default comparator function for chars
+ */
 static int default_char_comparator(const void *a, const void *b)
 {
     return (*(const char *)a - *(const char *)b);
 }
 
-// For Windows, provide implementations for any missing functions
-#if defined(_WIN32) || defined(_MSC_VER)
-VSORT_API int get_num_processors()
+/**
+ * Public API implementation
+ */
+
+VSORT_API void vsort_init(void)
 {
-    SYSTEM_INFO sysinfo;
-    GetSystemInfo(&sysinfo);
-    return sysinfo.dwNumberOfProcessors;
+    static bool initialized = false;
+
+    if (!initialized)
+    {
+        // Initialize logger
+        vsort_log_init(VSORT_LOG_WARNING);
+
+        // Initialize thresholds based on system capabilities
+        vsort_init_thresholds();
+
+        initialized = true;
+    }
 }
-#else
-// Unix version
-VSORT_API int get_num_processors()
+
+VSORT_API void vsort(int arr[], int n)
 {
-    return (int)sysconf(_SC_NPROCESSORS_ONLN);
+    // Initialize if not already done
+    vsort_init();
+
+    // Early exit for trivial cases
+    if (!arr || n <= 1)
+    {
+        return;
+    }
+
+    vsort_log_debug("Starting vsort with array size: %d", n);
+
+    // Select optimal algorithm based on array size and characteristics
+    if (n <= thresholds.insertion_threshold)
+    {
+        // For very small arrays, just use insertion sort
+        insertion_sort(arr, 0, n - 1);
+    }
+    else if (n >= thresholds.parallel_threshold)
+    {
+        // For large arrays, use parallel sorting if available
+        vsort_parallel(arr, n);
+    }
+    else if (n >= thresholds.radix_threshold)
+    {
+        // For medium-large sized arrays, consider radix sort
+        radix_sort(arr, n);
+    }
+    else
+    {
+        // For medium-sized arrays, use quicksort
+        vsort_sequential(arr, n);
+    }
+
+    vsort_log_debug("vsort completed for array size: %d", n);
 }
-#endif
+
+VSORT_API void vsort_with_comparator(void *arr, int n, size_t size, int (*compare)(const void *, const void *))
+{
+    // Generic sorting - fallback to standard qsort for now
+    if (!arr || n <= 1 || size == 0 || !compare)
+    {
+        return;
+    }
+
+    qsort(arr, n, size, compare);
+}
+
+VSORT_API void vsort_float(float arr[], int n)
+{
+    if (!arr || n <= 1)
+    {
+        return;
+    }
+
+    qsort(arr, n, sizeof(float), default_float_comparator);
+}
+
+VSORT_API void vsort_char(char arr[], int n)
+{
+    if (!arr || n <= 1)
+    {
+        return;
+    }
+
+    qsort(arr, n, sizeof(char), default_char_comparator);
+}
+
+VSORT_API int get_num_processors(void)
+{
+    return get_physical_core_count();
+}

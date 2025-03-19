@@ -36,6 +36,17 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 6. **Adaptive Algorithm Selection**:  
    VSort selects algorithms based on array size and data patterns, using insertion sort for small arrays (threshold around 16 elements) and quicksort for larger ones, with parallel processing for very large arrays.
 
+### Recent Improvements
+
+Recent updates have further enhanced VSort's reliability and performance:
+
+1. **Improved Error Recovery**: The parallel merge implementation now includes robust validation with automatic error recovery
+2. **Enhanced Memory Management**: Better handling of memory alignment for SIMD operations
+3. **Optimized Build System**: Simplified build process with proper architecture detection and compiler flags
+4. **Increased Stability**: Fixed boundary cases and edge conditions in parallel sorting
+5. **Cleaner Codebase**: Fixed compiler warnings and improved code maintainability
+6. **Robust Testing**: Enhanced performance tests to avoid memory issues with large arrays
+
 ### Key Technical Features
 
 - **Vectorized Partitioning**: Uses NEON SIMD instructions to accelerate the partitioning step
@@ -163,16 +174,21 @@ vsort(array, size);
 git clone https://github.com/davidesantangelo/vsort.git
 cd vsort
 
-# Create a build directory and configure the project
+# Option 1: Use CMake (recommended for cross-platform)
 mkdir build
 cd build
 cmake ..
-
-# Build everything (library, tests, and examples)
 cmake --build .
 
+# Option 2: Use Makefile (simpler for Unix-like systems)
+make
+
+# Option 3: Use the build script (for quick builds on macOS)
+./build_script.sh
+
 # Run all tests
-ctest
+make test   # If using make
+ctest       # If using CMake
 ```
 
 CMake automatically detects your hardware and applies appropriate optimizations:

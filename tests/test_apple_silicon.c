@@ -126,6 +126,20 @@ static int test_parallel_sorting()
     if (!is_sorted(arr, n))
     {
         printf("FAILED: Array not sorted correctly\n");
+
+        // Find where the sorting failed by checking consecutive elements
+        for (int i = 1; i < n; i++)
+        {
+            if (arr[i] < arr[i - 1])
+            {
+                printf("  Sorting failure at index %d: arr[%d]=%d > arr[%d]=%d\n",
+                       i, i - 1, arr[i - 1], i, arr[i]);
+                // Only show the first few failures
+                if (i > 10)
+                    break;
+            }
+        }
+
         free(arr);
         return 0;
     }

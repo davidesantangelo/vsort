@@ -1,30 +1,48 @@
 cmake_minimum_required(VERSION 3.12)
 
 project(vsort 
-    VERSION 0.3.1
+    VERSION 0.3.2
     DESCRIPTION "High-Performance Sorting Algorithm for Apple Silicon"
     LANGUAGES C
 )
 
 set(CMAKE_C_STANDARD 11)
 
+# Add logger source files
+set(VSORT_SOURCES vsort.c vsort_logger.c)
+
+# Option for Apple Silicon optimizations
+option(USE_APPLE_SILICON_OPTIMIZATIONS "Enable optimizations for Apple Silicon" OFF)
+option(ENABLE_NEON "Enable NEON SIMD instructions" OFF)
+
 # Check for Apple Silicon
 if(APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     set(USE_APPLE_SILICON_OPTIMIZATIONS ON)
     add_compile_definitions(USE_APPLE_SILICON_OPTIMIZATIONS)
     add_compile_options(-mcpu=apple-a14)
+    
+    # Enable NEON instructions - always available on Apple Silicon
+    set(ENABLE_NEON ON)
+    add_compile_definitions(USE_ARM_NEON)
+else()
+    # Enable NEON if requested on other ARM platforms
+    if(ENABLE_NEON AND NOT (APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "arm64"))
+        add_compile_definitions(USE_ARM_NEON)
+        # Only use -mfpu=neon on traditional ARM, not on Apple Silicon
+        add_compile_options(-mfpu=neon)
+    endif()
 endif()
 
 # Define the library
 if(WIN32)
     # Create a shared library (DLL) on Windows
-    add_library(vsort SHARED vsort.c)
+    add_library(vsort SHARED ${VSORT_SOURCES})
     # Export symbols properly for DLL
     target_compile_definitions(vsort PRIVATE VSORT_EXPORTS)
     target_compile_definitions(vsort PRIVATE _CRT_SECURE_NO_WARNINGS)
 else()
     # Create a static library on other platforms
-    add_library(vsort STATIC vsort.c)
+    add_library(vsort STATIC ${VSORT_SOURCES})
 endif()
 
 target_include_directories(vsort 

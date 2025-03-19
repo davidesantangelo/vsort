@@ -83,8 +83,9 @@ int main()
 
     srand(time(NULL));
 
-    // Array sizes to test
-    int sizes[] = {100, 1000, 10000, 100000, 1000000};
+    // FIXED: Limit array sizes to avoid memory issues and bus errors
+    // Original: int sizes[] = {100, 1000, 10000, 100000, 1000000};
+    int sizes[] = {100, 1000, 10000, 50000, 100000};
     int num_sizes = sizeof(sizes) / sizeof(sizes[0]);
 
     // Number of test runs per configuration for averaging

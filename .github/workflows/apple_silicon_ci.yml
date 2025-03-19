@@ -1,0 +1,69 @@
+name: Apple Silicon CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test-apple-silicon:
+    runs-on: macos-latest
+    name: Build and Test on Apple Silicon
+
+    steps:
+    - name: Check if running on Apple Silicon
+      id: check-arch
+      run: |
+        ARCH=$(uname -m)
+        echo "Detected architecture: $ARCH"
+        if [ "$ARCH" = "arm64" ]; then
+          echo "::set-output name=is_arm64::true"
+        else
+          echo "::set-output name=is_arm64::false"
+        fi
+
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up CMake
+      uses: jwlawson/actions-setup-cmake@v1.13
+
+    - name: Configure on non-Apple Silicon
+      if: steps.check-arch.outputs.is_arm64 != 'true'
+      run: |
+        echo "Warning: Not running on Apple Silicon hardware. NEON optimizations will not be tested."
+        mkdir -p build
+        cd build
+        cmake ..
+
+    - name: Configure on Apple Silicon with NEON optimizations
+      if: steps.check-arch.outputs.is_arm64 == 'true'
+      run: |
+        echo "Running on Apple Silicon. NEON optimizations will be tested."
+        mkdir -p build
+        cd build
+        cmake -DUSE_APPLE_SILICON_OPTIMIZATIONS=ON -DENABLE_NEON=ON ..
+
+    - name: Build
+      run: |
+        cd build
+        cmake --build .
+
+    - name: Run tests
+      run: |
+        cd build
+        ctest --verbose
+
+    - name: Run Apple Silicon specific tests
+      if: steps.check-arch.outputs.is_arm64 == 'true'
+      run: |
+        cd build
+        ./tests/test_apple_silicon
+
+    - name: Run benchmarks
+      if: steps.check-arch.outputs.is_arm64 == 'true'
+      run: |
+        cd build
+        ./examples/apple_silicon_test

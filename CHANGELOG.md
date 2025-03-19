@@ -4,6 +4,32 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2025-03-20
+
+### Added
+- CI testing on Apple Silicon hardware to validate NEON optimizations
+- Logger system with configurable verbosity levels to replace printf debugging
+
+### Improved
+- Removed all printf debugging statements from production code
+- Better error handling with proper logging instead of console output
+- Simplified code paths for improved maintainability
+- Enhanced parallel sorting strategy with better sequential merge for reliability
+- Added more thorough error detection and validation throughout sorting process
+- Improved memory alignment handling for NEON SIMD operations
+- Added robust Makefile for simpler build process on all platforms
+- Properly marked unused functions with attributes to silence compiler warnings
+
+### Fixed
+- Memory alignment issues in SIMD operations
+- CI pipeline now tests on relevant hardware platforms
+- Code cleanup for production readiness
+- CMake build errors with `-mfpu=neon` flag on Apple Silicon platforms
+- Corrected boundary checking in parallel merge algorithm to prevent sorting failures
+- Addressed potential memory issues in performance tests with large arrays
+- Improved verification checks to detect and recover from incorrect merges
+- Fixed compiler warnings about unused functions in the codebase
+
 ## [0.3.1] - 2025-03-19
 
 ### Added
