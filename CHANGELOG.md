@@ -4,7 +4,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2] - 2025-03-20
+## [0.3.3] - 2025-03-20
+
+### Added
+- Dynamic threshold adjustment to auto-tune sorting parameters based on hardware
+- Hardware detection system that identifies CPU model, cache sizes, and core types
+- Adaptive calibration for sorting thresholds to optimize performance by hardware
+- Enhanced CPU detection on both Apple Silicon and Linux/Windows platforms
+
+### Improved
+- Better utilization of CPU cache hierarchy for optimal sorting performance
+- Refined parallel threshold calculation based on available cores and cache sizes
+- More intelligent P-core vs E-core utilization on Apple Silicon
+- Improved documentation of hardware detection and calibration process
+
+## [0.3.2] - 2025-03-19
 
 ### Added
 - CI testing on Apple Silicon hardware to validate NEON optimizations

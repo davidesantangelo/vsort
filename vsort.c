@@ -4,7 +4,7 @@
  * A sorting library specifically optimized for Apple Silicon processors,
  * leveraging ARM NEON vector instructions and Grand Central Dispatch.
  *
- * Version 0.3.2
+ * Version 0.3.3
  *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
@@ -74,6 +74,8 @@ static vsort_thresholds_t thresholds = {
 
 // Forward declarations for all internal functions
 static void vsort_init_thresholds(void);
+static void vsort_detect_hardware_characteristics(void);
+static void vsort_calibrate_thresholds(void);
 #if defined(__APPLE__) && defined(__arm64__)
 static void *vsort_aligned_malloc(size_t size) __attribute__((unused));
 static void vsort_aligned_free(void *ptr) __attribute__((unused));
@@ -97,6 +99,308 @@ static void radix_sort(int arr[], int n);
 static void vsort_sequential(int *arr, int size);
 static void vsort_parallel(int *arr, int size);
 
+// Hardware characteristics structure
+typedef struct
+{
+    int l1_cache_size;     // L1 cache size in bytes
+    int l2_cache_size;     // L2 cache size in bytes
+    int l3_cache_size;     // L3 cache size in bytes (if available)
+    int cache_line_size;   // Cache line size in bytes
+    int simd_width;        // SIMD register width in bytes
+    int performance_cores; // Number of performance cores
+    int efficiency_cores;  // Number of efficiency cores
+    int total_cores;       // Total number of CPU cores
+    bool has_simd;         // SIMD support flag
+    bool has_neon;         // ARM NEON support flag
+    double cpu_freq_ghz;   // CPU frequency in GHz (if available)
+    char cpu_model[128];   // CPU model string
+} vsort_hardware_t;
+
+// Global hardware characteristics
+static vsort_hardware_t hardware = {
+    .l1_cache_size = 32768,   // Default: 32KB L1 cache
+    .l2_cache_size = 2097152, // Default: 2MB L2 cache
+    .l3_cache_size = 8388608, // Default: 8MB L3 cache
+    .cache_line_size = 64,    // Default: 64-byte cache lines
+    .simd_width = 16,         // Default: 128-bit SIMD (16 bytes)
+    .performance_cores = 4,   // Default: 4 performance cores
+    .efficiency_cores = 4,    // Default: 4 efficiency cores
+    .total_cores = 8,         // Default: 8 total cores
+    .has_simd = false,
+    .has_neon = false,
+    .cpu_freq_ghz = 2.0, // Default: 2.0 GHz
+    .cpu_model = "Unknown"};
+
+/**
+ * Detect hardware characteristics to optimize thresholds
+ */
+static void vsort_detect_hardware_characteristics(void)
+{
+    // Get total number of cores
+    hardware.total_cores = get_physical_core_count();
+
+#if defined(__APPLE__) && defined(__arm64__)
+    // On Apple Silicon, try to detect P-cores and E-cores
+    if (hardware.total_cores >= 8)
+    {
+        // Assuming typical Apple Silicon configuration on M1/M2/M3 chips
+        hardware.performance_cores = hardware.total_cores / 2;
+        hardware.efficiency_cores = hardware.total_cores - hardware.performance_cores;
+    }
+    else
+    {
+        // If fewer cores, assume they're all performance cores
+        hardware.performance_cores = hardware.total_cores;
+        hardware.efficiency_cores = 0;
+    }
+
+    hardware.has_neon = true;
+    hardware.has_simd = true;
+
+// Detect cache information
+#ifdef __APPLE__
+    // Try to get cache line size and L1/L2 cache sizes from sysctl
+    FILE *cmd;
+    char buffer[128];
+
+    // Get cache line size
+    cmd = popen("sysctl -n hw.cachelinesize 2>/dev/null", "r");
+    if (cmd && fgets(buffer, sizeof(buffer), cmd))
+    {
+        hardware.cache_line_size = atoi(buffer);
+    }
+    if (cmd)
+        pclose(cmd);
+
+    // Get L1 data cache size
+    cmd = popen("sysctl -n hw.l1dcachesize 2>/dev/null", "r");
+    if (cmd && fgets(buffer, sizeof(buffer), cmd))
+    {
+        hardware.l1_cache_size = atoi(buffer);
+    }
+    if (cmd)
+        pclose(cmd);
+
+    // Get L2 cache size
+    cmd = popen("sysctl -n hw.l2cachesize 2>/dev/null", "r");
+    if (cmd && fgets(buffer, sizeof(buffer), cmd))
+    {
+        hardware.l2_cache_size = atoi(buffer);
+    }
+    if (cmd)
+        pclose(cmd);
+
+    // Get L3 cache size
+    cmd = popen("sysctl -n hw.l3cachesize 2>/dev/null", "r");
+    if (cmd && fgets(buffer, sizeof(buffer), cmd))
+    {
+        hardware.l3_cache_size = atoi(buffer);
+        if (hardware.l3_cache_size == 0)
+        {
+            // Some systems return 0 if L3 doesn't exist
+            hardware.l3_cache_size = 8388608; // Default to 8MB
+        }
+    }
+    if (cmd)
+        pclose(cmd);
+
+    // Get CPU model
+    cmd = popen("sysctl -n machdep.cpu.brand_string 2>/dev/null", "r");
+    if (cmd && fgets(buffer, sizeof(buffer), cmd))
+    {
+        strncpy(hardware.cpu_model, buffer, sizeof(hardware.cpu_model) - 1);
+        hardware.cpu_model[sizeof(hardware.cpu_model) - 1] = '\0';
+
+        // Remove trailing newline
+        size_t len = strlen(hardware.cpu_model);
+        if (len > 0 && hardware.cpu_model[len - 1] == '\n')
+        {
+            hardware.cpu_model[len - 1] = '\0';
+        }
+    }
+    if (cmd)
+        pclose(cmd);
+#endif
+
+#elif defined(__linux__)
+#ifdef __ARM_NEON
+    hardware.has_neon = true;
+    hardware.has_simd = true;
+#endif
+
+    // On Linux, try to parse /proc/cpuinfo for cache details
+    FILE *cpuinfo = fopen("/proc/cpuinfo", "r");
+    if (cpuinfo)
+    {
+        char line[256];
+        while (fgets(line, sizeof(line), cpuinfo))
+        {
+            if (strstr(line, "model name"))
+            {
+                char *model = strchr(line, ':');
+                if (model)
+                {
+                    model++; // Skip past the colon
+                    while (*model == ' ' || *model == '\t')
+                        model++; // Skip whitespace
+                    strncpy(hardware.cpu_model, model, sizeof(hardware.cpu_model) - 1);
+                    hardware.cpu_model[sizeof(hardware.cpu_model) - 1] = '\0';
+
+                    // Remove trailing newline
+                    size_t len = strlen(hardware.cpu_model);
+                    if (len > 0 && hardware.cpu_model[len - 1] == '\n')
+                    {
+                        hardware.cpu_model[len - 1] = '\0';
+                    }
+                    break;
+                }
+            }
+        }
+        fclose(cpuinfo);
+    }
+
+    // Try to read cache information from sysfs
+    FILE *cache_info;
+    char file_path[256];
+    char buffer[64];
+
+    // For L1 cache
+    snprintf(file_path, sizeof(file_path), "/sys/devices/system/cpu/cpu0/cache/index0/size");
+    cache_info = fopen(file_path, "r");
+    if (cache_info)
+    {
+        if (fgets(buffer, sizeof(buffer), cache_info))
+        {
+            int size;
+            char unit;
+            if (sscanf(buffer, "%d%c", &size, &unit) == 2)
+            {
+                if (unit == 'K' || unit == 'k')
+                {
+                    hardware.l1_cache_size = size * 1024;
+                }
+                else if (unit == 'M' || unit == 'm')
+                {
+                    hardware.l1_cache_size = size * 1024 * 1024;
+                }
+            }
+        }
+        fclose(cache_info);
+    }
+
+    // For L2 cache
+    snprintf(file_path, sizeof(file_path), "/sys/devices/system/cpu/cpu0/cache/index1/size");
+    cache_info = fopen(file_path, "r");
+    if (cache_info)
+    {
+        if (fgets(buffer, sizeof(buffer), cache_info))
+        {
+            int size;
+            char unit;
+            if (sscanf(buffer, "%d%c", &size, &unit) == 2)
+            {
+                if (unit == 'K' || unit == 'k')
+                {
+                    hardware.l2_cache_size = size * 1024;
+                }
+                else if (unit == 'M' || unit == 'm')
+                {
+                    hardware.l2_cache_size = size * 1024 * 1024;
+                }
+            }
+        }
+        fclose(cache_info);
+    }
+
+    // For cache line size
+    snprintf(file_path, sizeof(file_path), "/sys/devices/system/cpu/cpu0/cache/index0/coherency_line_size");
+    cache_info = fopen(file_path, "r");
+    if (cache_info)
+    {
+        if (fgets(buffer, sizeof(buffer), cache_info))
+        {
+            hardware.cache_line_size = atoi(buffer);
+        }
+        fclose(cache_info);
+    }
+#endif
+
+    vsort_log_info("Detected hardware: %s with %d cores (%d P-cores, %d E-cores)",
+                   hardware.cpu_model, hardware.total_cores,
+                   hardware.performance_cores, hardware.efficiency_cores);
+    vsort_log_debug("Cache: L1=%dKB, L2=%dKB, L3=%dKB, Line=%d bytes, SIMD=%d bytes%s%s",
+                    hardware.l1_cache_size / 1024, hardware.l2_cache_size / 1024,
+                    hardware.l3_cache_size / 1024, hardware.cache_line_size, hardware.simd_width,
+                    hardware.has_simd ? ", SIMD" : "",
+                    hardware.has_neon ? ", NEON" : "");
+}
+
+/**
+ * Calibrate thresholds by running quick tests on sample arrays
+ */
+static void vsort_calibrate_thresholds(void)
+{
+    // For more complex calibration, we'd run benchmarks on different sized arrays
+    // and adjust thresholds dynamically. This is a simpler approach that uses
+    // hardware characteristics to make educated guesses.
+
+    // Calculate best insertion sort threshold based on cache line size
+    // One cache line is typically 64 bytes = 16 integers
+    int insertion_threshold = hardware.cache_line_size / sizeof(int);
+
+    // Clamp to reasonable range
+    if (insertion_threshold < 8)
+        insertion_threshold = 8;
+    if (insertion_threshold > 32)
+        insertion_threshold = 32;
+    thresholds.insertion_threshold = insertion_threshold;
+
+    // Vector threshold depends on SIMD width and whether NEON is available
+    if (hardware.has_neon)
+    {
+        // For NEON on Apple Silicon, use wider vectors
+        thresholds.vector_threshold = MAX(32, hardware.simd_width / sizeof(int) * 8);
+    }
+    else if (hardware.has_simd)
+    {
+        // For other SIMD, use more conservative threshold
+        thresholds.vector_threshold = MAX(16, hardware.simd_width / sizeof(int) * 4);
+    }
+    else
+    {
+        // No SIMD, less benefit from vectorization
+        thresholds.vector_threshold = 64;
+    }
+
+    // Calculate parallel threshold based on core count and L3 cache
+    if (hardware.total_cores >= 8)
+    {
+        // Many cores, start parallelizing sooner
+        thresholds.parallel_threshold = MIN(50000, hardware.l3_cache_size / sizeof(int) / 4);
+    }
+    else if (hardware.total_cores >= 4)
+    {
+        // Moderate core count
+        thresholds.parallel_threshold = MIN(75000, hardware.l3_cache_size / sizeof(int) / 3);
+    }
+    else
+    {
+        // Few cores, delay parallelization until larger arrays
+        thresholds.parallel_threshold = MIN(100000, hardware.l3_cache_size / sizeof(int) / 2);
+    }
+
+    // Elements that fit in L1 cache
+    thresholds.cache_optimal_elements = hardware.l1_cache_size / sizeof(int) / 2;
+
+    // Radix sort threshold - faster for large arrays
+    thresholds.radix_threshold = MAX(500000, hardware.l3_cache_size / sizeof(int) * 2);
+
+    vsort_log_info("Calibrated thresholds - insertion: %d, vector: %d, parallel: %d, radix: %d, cache_optimal: %d",
+                   thresholds.insertion_threshold, thresholds.vector_threshold,
+                   thresholds.parallel_threshold, thresholds.radix_threshold,
+                   thresholds.cache_optimal_elements);
+}
+
 /**
  * Initialize thresholds based on system characteristics
  */
@@ -109,38 +413,11 @@ static void vsort_init_thresholds(void)
         return;
     }
 
-    // Default values are already set in the static initialization
+    // Detect hardware characteristics first
+    vsort_detect_hardware_characteristics();
 
-    // Adjust based on CPU cores
-    int cores = get_physical_core_count();
-
-    // L1/L2 cache considerations - typical L1 cache is 32KB per core
-    // Assuming 4-byte integers, around 8K elements would fit in L1
-    thresholds.cache_optimal_elements = 8192;
-
-    // Lower parallel threshold with more cores
-    if (cores >= 8)
-    {
-        thresholds.parallel_threshold = 50000;
-    }
-    else if (cores >= 4)
-    {
-        thresholds.parallel_threshold = 75000;
-    }
-
-    // Adjust insertion threshold for branch prediction efficiency
-    // Modern CPUs typically do well with insertion sort up to 16-24 elements
-    thresholds.insertion_threshold = 16;
-
-// Vector threshold should be set based on SIMD width and overhead
-#if defined(__ARM_NEON) || defined(__ARM_NEON__)
-    // For NEON (128-bit), processing 4 integers at once
-    thresholds.vector_threshold = 32;
-#endif
-
-    vsort_log_debug("Initialized thresholds - insertion: %d, vector: %d, parallel: %d, radix: %d",
-                    thresholds.insertion_threshold, thresholds.vector_threshold,
-                    thresholds.parallel_threshold, thresholds.radix_threshold);
+    // Then calibrate thresholds based on those characteristics
+    vsort_calibrate_thresholds();
 
     initialized = true;
 }

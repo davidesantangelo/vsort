@@ -1,7 +1,7 @@
 /**
  * VSort: High-Performance Sorting Algorithm for Apple Silicon
  *
- * Version 0.3.2
+ * Version 0.3.3
  *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
@@ -41,7 +41,7 @@ extern "C"
 #define VSORT_VERSION_MAJOR 0
 #define VSORT_VERSION_MINOR 3
 #define VSORT_VERSION_PATCH 2
-#define VSORT_VERSION_STRING "0.3.2"
+#define VSORT_VERSION_STRING "0.3.3"
 
     /**
      * HyperSort - A revolutionary sorting algorithm
@@ -70,6 +70,14 @@ extern "C"
 
     // Utility functions
     VSORT_API int get_num_processors();
+
+    /**
+     * Initialize vsort library - normally called automatically,
+     * but can be called explicitly for finer control.
+     * This function detects hardware characteristics and calibrates
+     * sorting thresholds for optimal performance.
+     */
+    VSORT_API void vsort_init(void);
 
 #ifdef __cplusplus
 }

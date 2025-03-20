@@ -40,12 +40,14 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 
 Recent updates have further enhanced VSort's reliability and performance:
 
-1. **Improved Error Recovery**: The parallel merge implementation now includes robust validation with automatic error recovery
-2. **Enhanced Memory Management**: Better handling of memory alignment for SIMD operations
-3. **Optimized Build System**: Simplified build process with proper architecture detection and compiler flags
-4. **Increased Stability**: Fixed boundary cases and edge conditions in parallel sorting
-5. **Cleaner Codebase**: Fixed compiler warnings and improved code maintainability
-6. **Robust Testing**: Enhanced performance tests to avoid memory issues with large arrays
+1. **Dynamic Threshold Adjustment**: The new auto-tuning system detects hardware characteristics and automatically calibrates sorting thresholds for optimal performance on any device
+2. **Hardware-Aware Optimization**: Added detection of CPU model, cache hierarchy, and core types to make intelligent performance decisions
+3. **Improved Error Recovery**: The parallel merge implementation now includes robust validation with automatic error recovery
+4. **Enhanced Memory Management**: Better handling of memory alignment for SIMD operations
+5. **Optimized Build System**: Simplified build process with proper architecture detection and compiler flags
+6. **Increased Stability**: Fixed boundary cases and edge conditions in parallel sorting
+7. **Cleaner Codebase**: Fixed compiler warnings and improved code maintainability
+8. **Robust Testing**: Enhanced performance tests to avoid memory issues with large arrays
 
 ### Key Technical Features
 
@@ -60,10 +62,11 @@ Recent updates have further enhanced VSort's reliability and performance:
 | Feature | Status | Notes |
 |---------|--------|-------|
 | NEON Vectorization | Implemented | Complete vector operations for partitioning and merging with optimized paths for homogeneous data chunks |
-| P/E Core Detection | Implemented | Basic detection and utilization of different core types |
+| P/E Core Detection | Implemented | Automatic detection and utilization of different core types |
+| Dynamic Threshold Adjustment | Implemented | Auto-calibrates sorting thresholds based on CPU, cache, and core characteristics |
 | Grand Central Dispatch | Implemented | Used for parallel workload distribution |
-| Adaptive Algorithm Selection | Implemented | Basic switching between algorithms based on input size |
-| Cache Optimization | Planned | Currently uses fixed thresholds, not fully cache-aware yet |
+| Adaptive Algorithm Selection | Implemented | Intelligent switching between algorithms based on hardware and data patterns |
+| Cache Optimization | Implemented | Cache-aware thresholds based on L1/L2/L3 cache sizes |
 | Branch Prediction Optimization | Planned | To be implemented in next release |
 
 ### Parallel Workload Management
@@ -158,9 +161,6 @@ int array[] = {5, 2, 9, 1, 5, 6};
 int size = sizeof(array) / sizeof(array[0]);
 vsort(array, size);
 ```
-
-## Building and Testing
-
 ### System Requirements
 
 - **Recommended**: Apple Silicon Mac (M1/M2/M3/M4) running macOS 11+
@@ -236,11 +236,14 @@ The project includes several example programs demonstrating different use cases:
 
 The latest version of VSort includes several key optimizations:
 
-1. **Enhanced NEON Vectorization**: Complete SIMD implementation for partitioning and merging that processes 4 integers at once, with specialized fast paths for homogeneous data segments
-2. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
-3. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
-4. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
-5. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
+1. **Dynamic Threshold Adjustment**: Automatically detects CPU model, cache sizes, and core configuration to set optimal thresholds for insertion sort, vectorization, parallel processing, and radix sort
+2. **Enhanced Hardware Detection**: Recognizes Apple Silicon processors and adjusts for their unique characteristics, with fallbacks for other platforms
+3. **Cache-Aware Processing**: Calibrates sorting parameters based on detected L1, L2, and L3 cache sizes to minimize cache misses
+4. **Enhanced NEON Vectorization**: Complete SIMD implementation for partitioning and merging that processes 4 integers at once, with specialized fast paths for homogeneous data segments
+5. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
+6. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
+7. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
+8. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
 
 ### Computational Complexity
 
@@ -261,12 +264,13 @@ While the asymptotic complexity matches traditional quicksort, VSort's optimizat
 
 VSort automatically optimizes for:
 
-- **Array size**: Different algorithms for small vs. large arrays
+- **Hardware detection**: Identifies CPU model, cache sizes, and core configuration
+- **Array size**: Different algorithms for small vs. large arrays with auto-calibrated thresholds
 - **Data patterns**: Optimizations for sorted or nearly-sorted data
 - **Hardware capabilities**: Adaptation to available cores and vector units
 - **Memory constraints**: Balance between memory usage and speed
 
-Advanced users can tune performance by adjusting thresholds for algorithm selection, configuring parallelization parameters, and enabling specific SIMD optimizations.
+VSort's dynamic threshold adjustment means that the library works optimally without manual configuration, but advanced users can still override settings if needed.
 
 ## Development
 
@@ -275,7 +279,7 @@ Advanced users can tune performance by adjusting thresholds for algorithm select
 Upcoming improvements planned for VSort:
 
 1. ~~**Enhanced NEON Implementation**: Complete vectorization of partition and merge operations~~ ✓ Implemented
-2. **Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics
+2. ~~**Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics~~ ✓ Implemented
 3. **Better P/E Core Utilization**: Improved workload distribution between core types
 4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns
 5. **Branch Prediction Improvements**: Reducing branch mispredictions in comparison operations
