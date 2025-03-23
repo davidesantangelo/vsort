@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2025-03-23
+
+### Added
+- Improved P/E core utilization with intelligent workload distribution
+- More precise detection of performance and efficiency cores on Apple Silicon
+- Chunk complexity analysis to assign work to appropriate core types
+- Separate dispatch queues with different QoS levels for different core types
+
+### Improved
+- More accurate detection of P-core and E-core counts using sysctl
+- Better parallel sorting performance through optimized core utilization
+- Power efficiency by directing appropriate work to efficiency cores
+
 ## [0.3.3] - 2025-03-20
 
 ### Added

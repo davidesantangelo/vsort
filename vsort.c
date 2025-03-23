@@ -4,7 +4,7 @@
  * A sorting library specifically optimized for Apple Silicon processors,
  * leveraging ARM NEON vector instructions and Grand Central Dispatch.
  *
- * Version 0.3.3
+ * Version 0.3.4
  *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
@@ -79,6 +79,9 @@ static void vsort_calibrate_thresholds(void);
 #if defined(__APPLE__) && defined(__arm64__)
 static void *vsort_aligned_malloc(size_t size) __attribute__((unused));
 static void vsort_aligned_free(void *ptr) __attribute__((unused));
+static dispatch_queue_t create_p_core_queue(void);
+static dispatch_queue_t create_e_core_queue(void);
+static void distribute_work_by_core_type(int arr[], int size, int chunk_size, int num_chunks);
 #else
 static void *vsort_aligned_malloc(size_t size);
 static void vsort_aligned_free(void *ptr);
@@ -143,9 +146,43 @@ static void vsort_detect_hardware_characteristics(void)
     // On Apple Silicon, try to detect P-cores and E-cores
     if (hardware.total_cores >= 8)
     {
-        // Assuming typical Apple Silicon configuration on M1/M2/M3 chips
-        hardware.performance_cores = hardware.total_cores / 2;
-        hardware.efficiency_cores = hardware.total_cores - hardware.performance_cores;
+        // For M-series chips, improve P/E core detection
+        FILE *cmd;
+        char buffer[256];
+        int detected_p_cores = 0;
+        int detected_e_cores = 0;
+
+        // Try to get precise core counts using sysctl
+        cmd = popen("sysctl -n hw.perflevel0.logicalcpu 2>/dev/null", "r");
+        if (cmd && fgets(buffer, sizeof(buffer), cmd))
+        {
+            detected_p_cores = atoi(buffer);
+        }
+        if (cmd)
+            pclose(cmd);
+
+        cmd = popen("sysctl -n hw.perflevel1.logicalcpu 2>/dev/null", "r");
+        if (cmd && fgets(buffer, sizeof(buffer), cmd))
+        {
+            detected_e_cores = atoi(buffer);
+        }
+        if (cmd)
+            pclose(cmd);
+
+        // If we got valid values, use them
+        if (detected_p_cores > 0 && detected_e_cores > 0)
+        {
+            hardware.performance_cores = detected_p_cores;
+            hardware.efficiency_cores = detected_e_cores;
+            vsort_log_info("Detected precise core counts: %d P-cores, %d E-cores",
+                           hardware.performance_cores, hardware.efficiency_cores);
+        }
+        else
+        {
+            // Fallback to approximation based on total cores
+            hardware.performance_cores = hardware.total_cores / 2;
+            hardware.efficiency_cores = hardware.total_cores - hardware.performance_cores;
+        }
     }
     else
     {
@@ -877,24 +914,36 @@ static void vsort_parallel(int *arr, int size)
         return;
     }
 
-    // Sort chunks in parallel first
-    dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
-        DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INITIATED, 0);
-    dispatch_queue_t queue = dispatch_queue_create("com.vsort.parallel", attr);
-    dispatch_group_t group = dispatch_group_create();
-
-    for (int i = 0; i < num_chunks; i++)
+    // Sort chunks using P/E core distribution if we have both core types
+    if (hardware.performance_cores > 0 && hardware.efficiency_cores > 0)
     {
-        dispatch_group_async(group, queue, ^{
-          int start = i * chunk_size;
-          int end = MIN(start + chunk_size - 1, size - 1);
-
-          // Use standard quicksort for each chunk
-          quicksort(arr, start, end);
-        });
+        vsort_log_info("Using P/E core optimization with %d P-cores and %d E-cores",
+                       hardware.performance_cores, hardware.efficiency_cores);
+        distribute_work_by_core_type(arr, size, chunk_size, num_chunks);
     }
+    else
+    {
+        // Fall back to standard parallel implementation
+        dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
+            DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INITIATED, 0);
+        dispatch_queue_t queue = dispatch_queue_create("com.vsort.parallel", attr);
+        dispatch_group_t group = dispatch_group_create();
 
-    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+        for (int i = 0; i < num_chunks; i++)
+        {
+            dispatch_group_async(group, queue, ^{
+              int start = i * chunk_size;
+              int end = MIN(start + chunk_size - 1, size - 1);
+
+              // Use standard quicksort for each chunk
+              quicksort(arr, start, end);
+            });
+        }
+
+        dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+        dispatch_release(group);
+        dispatch_release(queue);
+    }
 
     // Now we do a SEQUENTIAL merge - parallel merges are causing issues
     // This is slower but much more reliable
@@ -954,8 +1003,6 @@ static void vsort_parallel(int *arr, int size)
 
     // Clean up
     free(temp);
-    dispatch_release(group);
-    dispatch_release(queue);
 
 #else
     // Fall back to sequential sort on non-Apple platforms
@@ -963,6 +1010,95 @@ static void vsort_parallel(int *arr, int size)
     vsort_sequential(arr, size);
 #endif
 }
+
+#if defined(__APPLE__) && defined(__arm64__)
+/**
+ * Creates a high-priority dispatch queue targeting performance cores
+ */
+static dispatch_queue_t create_p_core_queue(void)
+{
+    dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
+        DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_USER_INITIATED, 0);
+    return dispatch_queue_create("com.vsort.p_cores", attr);
+}
+
+/**
+ * Creates a lower-priority dispatch queue targeting efficiency cores
+ */
+static dispatch_queue_t create_e_core_queue(void)
+{
+    dispatch_queue_attr_t attr = dispatch_queue_attr_make_with_qos_class(
+        DISPATCH_QUEUE_CONCURRENT, QOS_CLASS_UTILITY, 0);
+    return dispatch_queue_create("com.vsort.e_cores", attr);
+}
+
+/**
+ * Analyzes a chunk's complexity to determine if it should be processed on P or E cores
+ * Higher complexity (more disorder) -> P cores
+ * Lower complexity (more ordered) -> E cores
+ */
+static bool is_complex_chunk(int arr[], int start, int end)
+{
+    // Sample a few elements to estimate chunk complexity
+    const int sample_size = MIN(20, (end - start + 1) / 4);
+    if (sample_size <= 1)
+        return false;
+
+    int inversions = 0;
+    int step = MAX(1, (end - start + 1) / sample_size);
+
+    for (int i = start; i < end - step; i += step)
+    {
+        if (arr[i] > arr[i + step])
+        {
+            inversions++;
+        }
+    }
+
+    // Return true if more than 30% of sampled pairs are out of order
+    return (inversions > (sample_size * 0.3));
+}
+
+/**
+ * Distributes sorting work across P-cores and E-cores based on chunk complexity
+ */
+static void distribute_work_by_core_type(int arr[], int size, int chunk_size, int num_chunks)
+{
+    dispatch_queue_t p_core_queue = create_p_core_queue();
+    dispatch_queue_t e_core_queue = create_e_core_queue();
+    dispatch_group_t group = dispatch_group_create();
+
+    vsort_log_debug("Distributing %d chunks between P-cores and E-cores", num_chunks);
+
+    // Distribute chunks based on complexity
+    for (int i = 0; i < num_chunks; i++)
+    {
+        int start = i * chunk_size;
+        int end = MIN(start + chunk_size - 1, size - 1);
+
+        // Get reference to arr and bounds for the block
+        int *arr_ref = arr;
+        int chunk_start = start;
+        int chunk_end = end;
+
+        // Analyze chunk complexity to determine which core type to use
+        bool is_complex = is_complex_chunk(arr, start, end);
+        dispatch_queue_t target_queue = is_complex ? p_core_queue : e_core_queue;
+
+        dispatch_group_async(group, target_queue, ^{
+          // Use standard quicksort for each chunk
+          quicksort(arr_ref, chunk_start, chunk_end);
+        });
+    }
+
+    dispatch_group_wait(group, DISPATCH_TIME_FOREVER);
+
+    // Clean up
+    dispatch_release(group);
+    dispatch_release(p_core_queue);
+    dispatch_release(e_core_queue);
+}
+#endif
 
 /**
  * Default comparator function for floats

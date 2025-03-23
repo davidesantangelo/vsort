@@ -25,7 +25,7 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
    GCD, Apple's task scheduling system, is used for parallelizing sorting tasks across multiple cores. This is crucial for leveraging Apple Silicon's multi-core architecture, distributing work to both P-cores and E-cores.
 
 3. **Performance & Efficiency Core Awareness**:  
-   VSort now intelligently detects and utilizes both Performance (P) and Efficiency (E) cores on Apple Silicon chips, assigning workloads appropriately for optimal speed and power efficiency. The algorithm dynamically adjusts thread allocation based on array size and core availability.
+   VSort intelligently detects and utilizes both Performance (P) and Efficiency (E) cores on Apple Silicon chips, assigning workloads appropriately for optimal speed and power efficiency. Complex, disordered chunks are processed on high-performance cores while simpler, more ordered chunks are sent to efficiency cores for better overall throughput and power usage.
 
 4. **Cache-Optimized Memory Access**:  
    VSort uses adaptive chunk sizing based on cache characteristics, with optimal chunk sizes for L2 cache on Apple Silicon (typically 128KB per core). This minimizes cache misses and improves throughput.
@@ -63,6 +63,7 @@ Recent updates have further enhanced VSort's reliability and performance:
 |---------|--------|-------|
 | NEON Vectorization | Implemented | Complete vector operations for partitioning and merging with optimized paths for homogeneous data chunks |
 | P/E Core Detection | Implemented | Automatic detection and utilization of different core types |
+| P/E Core Workload Optimization | Implemented | Intelligent workload distribution based on chunk complexity |
 | Dynamic Threshold Adjustment | Implemented | Auto-calibrates sorting thresholds based on CPU, cache, and core characteristics |
 | Grand Central Dispatch | Implemented | Used for parallel workload distribution |
 | Adaptive Algorithm Selection | Implemented | Intelligent switching between algorithms based on hardware and data patterns |
@@ -71,6 +72,7 @@ Recent updates have further enhanced VSort's reliability and performance:
 
 ### Parallel Workload Management
 
+- Work distribution based on chunk complexity to P-cores and E-cores
 - Work-stealing queue structure for better load balancing
 - Balanced binary tree approach for parallel merging
 - Adaptive chunk sizing that balances cache efficiency and parallelism
@@ -238,12 +240,13 @@ The latest version of VSort includes several key optimizations:
 
 1. **Dynamic Threshold Adjustment**: Automatically detects CPU model, cache sizes, and core configuration to set optimal thresholds for insertion sort, vectorization, parallel processing, and radix sort
 2. **Enhanced Hardware Detection**: Recognizes Apple Silicon processors and adjusts for their unique characteristics, with fallbacks for other platforms
-3. **Cache-Aware Processing**: Calibrates sorting parameters based on detected L1, L2, and L3 cache sizes to minimize cache misses
-4. **Enhanced NEON Vectorization**: Complete SIMD implementation for partitioning and merging that processes 4 integers at once, with specialized fast paths for homogeneous data segments
-5. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
-6. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
-7. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
-8. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
+3. **P/E Core Workload Optimization**: Analyzes chunk complexity to distribute work optimally between performance and efficiency cores
+4. **Cache-Aware Processing**: Calibrates sorting parameters based on detected L1, L2, and L3 cache sizes to minimize cache misses
+5. **Enhanced NEON Vectorization**: Complete SIMD implementation for partitioning and merging that processes 4 integers at once, with specialized fast paths for homogeneous data segments
+6. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
+7. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
+8. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
+9. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
 
 ### Computational Complexity
 
@@ -280,7 +283,7 @@ Upcoming improvements planned for VSort:
 
 1. ~~**Enhanced NEON Implementation**: Complete vectorization of partition and merge operations~~ ✓ Implemented
 2. ~~**Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics~~ ✓ Implemented
-3. **Better P/E Core Utilization**: Improved workload distribution between core types
+3. ~~**Better P/E Core Utilization**: Improved workload distribution between core types~~ ✓ Implemented
 4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns
 5. **Branch Prediction Improvements**: Reducing branch mispredictions in comparison operations
 
