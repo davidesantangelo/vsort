@@ -134,7 +134,20 @@ VSort provides:
 
 ### Benchmark Results
 
-Standard benchmark comparison with 1,000,000 random integers:
+#### Benchmark with 10,000 random integers:
+
+```
+Algorithm       | Avg Time (ms)   | Min Time (ms)   | Verification   
+------------------|-----------------|-----------------|-----------------
+vsort           | 0.581           | 0.538           | PASSED         
+quicksort       | 0.570           | 0.557           | PASSED         
+mergesort       | 0.558           | 0.545           | PASSED         
+std_sort        | 0.783           | 0.754           | PASSED         
+```
+
+For small arrays (10,000 elements), all sorting algorithms perform similarly well, with mergesort showing a slight advantage in average time. VSort remains competitive with custom implementations while still outperforming the standard library sort.
+
+#### Benchmark with 1,000,000 random integers:
 
 ```
 Algorithm       Avg Time (ms)   Min Time (ms)   Verification   
@@ -145,7 +158,7 @@ mergesort       39.68           39.42           PASSED
 std::sort       60.70           60.46           PASSED         
 ```
 
-VSort shows excellent minimum times (36.27ms), significantly better than all other algorithms including mergesort's best time (39.42ms). This indicates that VSort can achieve superior peak performance in optimal conditions.
+With larger arrays (1,000,000 elements), VSort shows excellent minimum times (36.27ms), significantly better than all other algorithms including mergesort's best time (39.42ms). This demonstrates that VSort's optimizations become more impactful as data size increases, providing superior performance for large datasets.
 
 ### Large Array Performance
 

@@ -1,5 +1,30 @@
 cmake_minimum_required(VERSION 3.12)
 
+# Find macOS SDK before project definition
+if(APPLE)
+    # Try to find a valid SDK path
+    set(POSSIBLE_SDK_PATHS
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk"
+        "/Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX.sdk"
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX14.sdk"
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX13.sdk"
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX12.sdk"
+        "/Library/Developer/CommandLineTools/SDKs/MacOSX11.sdk"
+    )
+    
+    foreach(SDK ${POSSIBLE_SDK_PATHS})
+        if(EXISTS ${SDK})
+            set(CMAKE_OSX_SYSROOT ${SDK})
+            message(STATUS "Using MacOS SDK at: ${SDK}")
+            break()
+        endif()
+    endforeach()
+    
+    if(NOT CMAKE_OSX_SYSROOT)
+        message(WARNING "Could not find MacOS SDK. Build may fail.")
+    endif()
+endif()
+
 project(vsort 
     VERSION 0.4.0
     DESCRIPTION "High-Performance Sorting Algorithm for Apple Silicon"
