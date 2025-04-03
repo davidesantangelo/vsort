@@ -1,7 +1,7 @@
 /**
  * VSort: High-Performance Sorting Algorithm for Apple Silicon
  *
- * Version 0.3.4
+ * Version 0.4.0
  *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
@@ -15,7 +15,7 @@ extern "C"
 {
 #endif
 
-#include <stddef.h>
+#include <stddef.h> // For size_t
 
 // Platform detection
 #if defined(_WIN32) || defined(_MSC_VER)
@@ -27,7 +27,7 @@ extern "C"
 #define VSORT_API __declspec(dllimport)
 #endif
 #else
-#define VSORT_API
+#define VSORT_API // Default for non-Windows
 #if defined(__APPLE__)
 #define VSORT_APPLE 1
 #elif defined(__linux__)
@@ -39,43 +39,78 @@ extern "C"
  * Version information
  */
 #define VSORT_VERSION_MAJOR 0
-#define VSORT_VERSION_MINOR 3
-#define VSORT_VERSION_PATCH 2
-#define VSORT_VERSION_STRING "0.3.4"
+#define VSORT_VERSION_MINOR 4
+#define VSORT_VERSION_PATCH 0
+#define VSORT_VERSION_STRING "0.4.0"
 
     /**
-     * HyperSort - A revolutionary sorting algorithm
+     * @brief Sorts an array of integers in ascending order.
      *
-     * HyperSort analyzes the input data and automatically selects the optimal
-     * sorting strategy based on array size, data distribution, and hardware
-     * characteristics. It combines multiple sorting techniques with advanced
-     * optimizations to achieve superior performance across a wide range of inputs.
+     * Automatically selects the optimal sorting strategy based on array size,
+     * data distribution (detects nearly sorted), and hardware characteristics.
+     * Uses optimizations like NEON (if available and implemented), GCD parallelism
+     * (including parallel merge passes), radix sort, quicksort, and insertion sort.
      *
-     * @param arr Array to be sorted
-     * @param n Length of the array
+     * @param arr The integer array to be sorted.
+     * @param n The number of elements in the array.
      */
     VSORT_API void vsort(int arr[], int n);
 
-    /*
-     * Generic sorting function with custom comparator
-     * Takes a comparison function pointer similar to qsort
+    /**
+     * @brief Sorts an array of floats in ascending order.
+     *
+     * Applies similar optimization strategies as vsort() for floats,
+     * including parallelism (with parallel merge passes) and adaptive algorithm selection.
+     * Note: Radix sort is not typically used for floats; primarily uses
+     * optimized quicksort/insertion sort. NEON optimizations for floats
+     * are possible but not yet implemented.
+     *
+     * @param arr The float array to be sorted.
+     * @param n The number of elements in the array.
+     */
+    VSORT_API void vsort_float(float arr[], int n);
+
+    /**
+     * @brief Sorts an array of chars in ascending order.
+     *
+     * Currently falls back to standard qsort. For optimal performance,
+     * this should be adapted using the library's internal sorting logic.
+     *
+     * @param arr The char array to be sorted.
+     * @param n The number of elements in the array.
+     */
+    VSORT_API void vsort_char(char arr[], int n);
+
+    /**
+     * @brief Generic sorting function with a custom comparator.
+     *
+     * Currently falls back to standard qsort. For optimal performance,
+     * this should be adapted using the library's internal sorting logic,
+     * potentially requiring modifications to quicksort/merge to handle
+     * the custom comparator efficiently.
+     *
+     * @param arr Pointer to the start of the array.
+     * @param n Number of elements in the array.
+     * @param size Size of each element in bytes.
+     * @param compare Pointer to the comparison function (like qsort).
      */
     VSORT_API void vsort_with_comparator(void *arr, int n, size_t size, int (*compare)(const void *, const void *));
 
-    /*
-     * Type-specific sorting functions
+    /**
+     * @brief Gets the number of physical processor cores available.
+     *
+     * @return The number of physical cores detected.
      */
-    VSORT_API void vsort_float(float arr[], int n);
-    VSORT_API void vsort_char(char arr[], int n);
-
-    // Utility functions
-    VSORT_API int get_num_processors();
+    VSORT_API int get_num_processors(void);
 
     /**
-     * Initialize vsort library - normally called automatically,
-     * but can be called explicitly for finer control.
-     * This function detects hardware characteristics and calibrates
-     * sorting thresholds for optimal performance.
+     * @brief Initializes the vsort library.
+     *
+     * Detects hardware characteristics (cores, cache, NEON support) and
+     * calibrates internal thresholds for optimal sorting algorithm selection.
+     * This is called automatically on the first sort operation but can be
+     * called explicitly if needed. Calling multiple times has no effect
+     * after the first successful initialization.
      */
     VSORT_API void vsort_init(void);
 

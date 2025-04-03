@@ -1,6 +1,6 @@
 # VSort: Advanced Sorting Algorithm Optimized for Apple Silicon
 
-VSort is a high-performance sorting library that leverages the unique architecture of Apple Silicon processors to deliver exceptional performance. By intelligently utilizing ARM NEON vector instructions, Grand Central Dispatch, and the heterogeneous core design of M-series chips, VSort achieves remarkable efficiency particularly for partially sorted data collections.
+VSort is a high-performance sorting library designed to leverage the unique architecture of Apple Silicon processors. By intelligently utilizing ARM NEON vector instruction detection, Grand Central Dispatch for parallelism, and adaptive algorithm selection based on hardware characteristics, VSort aims to deliver exceptional sorting performance.
 
 **Author: [Davide Santangelo](https://github.com/davidesantangelo)**
 
@@ -48,27 +48,32 @@ Recent updates have further enhanced VSort's reliability and performance:
 6. **Increased Stability**: Fixed boundary cases and edge conditions in parallel sorting
 7. **Cleaner Codebase**: Fixed compiler warnings and improved code maintainability
 8. **Robust Testing**: Enhanced performance tests to avoid memory issues with large arrays
+9. **Parallel Merge Dispatch**: Merge passes in parallel sort now dispatch merge operations concurrently using GCD's dispatch_apply, replacing the previous sequential merge loop. (Note: The underlying `merge_sorted_arrays_*` function is still sequential internally).
+
 
 ### Key Technical Features
 
-- **Vectorized Partitioning**: Uses NEON SIMD instructions to accelerate the partitioning step
-- **Parallelized Sorting**: Distributes work across multiple cores for large arrays
-- **Optimized Insertion Sort**: Enhanced for Apple's branch prediction units
-- **Three-Way Partitioning**: Efficiently handles duplicate elements
-- **QoS Integration**: Uses Apple's Quality of Service APIs for optimal core utilization
+- **Hybrid Approach**: Combines multiple sorting algorithms (Insertion, Quick, Radix, Parallel Merge Sort structure)
+- **Hardware Detection**: Runtime detection of cores, cache sizes, NEON support
+- **Auto-Calibration**: Dynamically sets internal thresholds based on detected hardware
+- **Parallelized Sorting (GCD)**: Distributes initial chunk sorting and merge passes across multiple cores for large arrays on Apple platforms
+- **Optimized Quicksort**: Iterative implementation with median-of-three pivot
+- **Optimized Insertion Sort**: Standard implementation, effective for small/nearly-sorted data
+- **LSD Radix Sort**: Efficient implementation for large integer arrays, handles negative numbers
 
 ### Current Implementation Status
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| NEON Vectorization | Implemented | Complete vector operations for partitioning and merging with optimized paths for homogeneous data chunks |
-| P/E Core Detection | Implemented | Automatic detection and utilization of different core types |
-| P/E Core Workload Optimization | Implemented | Intelligent workload distribution based on chunk complexity |
-| Dynamic Threshold Adjustment | Implemented | Auto-calibrates sorting thresholds based on CPU, cache, and core characteristics |
-| Grand Central Dispatch | Implemented | Used for parallel workload distribution |
-| Adaptive Algorithm Selection | Implemented | Intelligent switching between algorithms based on hardware and data patterns |
-| Cache Optimization | Implemented | Cache-aware thresholds based on L1/L2/L3 cache sizes |
-| Branch Prediction Optimization | Planned | To be implemented in next release |
+| NEON Vectorization | Planned / Partially (Detection only) | Header included, detection present. Merge/Partition need implementation. |
+| P/E Core Detection | Implemented | Detects P/E cores via sysctl. |
+| P/E Core Workload Optimization | Simplified (QoS based) / Planned | Relies on GCD QoS; complex heuristic distribution removed. |
+| Dynamic Threshold Adjustment | Implemented | Auto-calibrates thresholds based on detected hardware. |
+| Grand Central Dispatch | Implemented | Used for parallel sort and parallel merge dispatch. |
+| Adaptive Algorithm Selection | Implemented | Switches between Insertion, Quick, Radix based on size/data. |
+| Cache Optimization | Implemented (Thresholds/Chunking) | Thresholds and parallel chunk size influenced by cache info. |
+| Parallel Merge | Implemented (Parallel Dispatch) / Incomplete | Merge calls are parallelized; internal merge logic is sequential. |
+| Branch Prediction Optimization | Planned | To be investigated. |
 
 ### Parallel Workload Management
 
@@ -102,7 +107,7 @@ VSort demonstrates:
 
 ### Algorithm Comparison
 
-When compared to traditional sorting algorithms on Apple Silicon:
+Compared to standard library `qsort` and basic textbook implementations of quicksort/mergesort, VSort is expected to offer significant advantages on Apple Silicon due to its hardware-specific optimizations and parallelism, especially for larger datasets. However, performance relative to highly optimized standard library sorts (like C++ `std::sort`, which often uses Introsort) requires careful benchmarking on the target machine.
 
 ```
 ┌────────────┬─────────────────┬────────────────┬────────────────┬─────────────────┐
@@ -279,13 +284,19 @@ VSort's dynamic threshold adjustment means that the library works optimally with
 
 ### Roadmap
 
-Upcoming improvements planned for VSort:
+Key areas for future improvement:
 
-1. ~~**Enhanced NEON Implementation**: Complete vectorization of partition and merge operations~~ ✓ Implemented
-2. ~~**Dynamic Threshold Adjustment**: Auto-tune thresholds based on hardware characteristics~~ ✓ Implemented
-3. ~~**Better P/E Core Utilization**: Improved workload distribution between core types~~ ✓ Implemented
-4. **Cache-Line Aligned Memory Access**: Further optimizing memory access patterns
-5. **Branch Prediction Improvements**: Reducing branch mispredictions in comparison operations
+1. **Implement NEON Vectorization**: Critical for maximizing performance. Implement NEON intrinsics within merge_sorted_arrays_* and potentially partition_* and radix_sort_int.
+
+2. **Advanced Parallel Merge**: Explore and implement more sophisticated parallel merge algorithms beyond simple parallel dispatch (e.g., recursive parallel merge, multi-way merge) to potentially reduce synchronization overhead or improve load balancing, especially if the internal merge becomes vectorized.
+
+3. **Branch Prediction Improvements**: Investigate techniques (e.g., conditional moves, __builtin_expect) to reduce branch mispredictions in comparison-heavy sections.
+
+4. **Optimize Generic Sorts**: Implement optimized versions of vsort_char and vsort_with_comparator using the internal sorting framework instead of falling back to qsort.
+
+5. **Cache-Line Aware Merge/Partition**: Further refine merge/partition logic to explicitly minimize cache line splits and improve data locality during SIMD operations.
+
+6. **Enhanced P/E Core Scheduling**: Revisit intelligent workload distribution if performance analysis shows simple QoS is insufficient.
 
 ### License
 
