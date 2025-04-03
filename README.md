@@ -2,6 +2,8 @@
 
 VSort is a high-performance sorting library designed to leverage the unique architecture of Apple Silicon processors. By intelligently utilizing ARM NEON vector instruction detection, Grand Central Dispatch for parallelism, and adaptive algorithm selection based on hardware characteristics, VSort aims to deliver exceptional sorting performance.
 
+![diagram](https://github.com/user-attachments/assets/cc7f7063-d63f-4f86-9733-56cb12b9b41c)
+
 **Author: [Davide Santangelo](https://github.com/davidesantangelo)**
 
 ## Table of Contents
