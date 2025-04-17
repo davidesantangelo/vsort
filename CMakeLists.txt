@@ -26,18 +26,26 @@ if(APPLE)
 endif()
 
 project(vsort 
-    VERSION 0.4.0
+    VERSION 0.5.0
     DESCRIPTION "High-Performance Sorting Algorithm for Apple Silicon"
     LANGUAGES C
 )
 
 set(CMAKE_C_STANDARD 11)
 
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+if(ipo_supported)
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -Ofast -march=native -fomit-frame-pointer -flto -ffast-math")
+set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto")
+
 # Add logger source files
 set(VSORT_SOURCES vsort.c vsort_logger.c)
 
 # Option for Apple Silicon optimizations
-option(USE_APPLE_SILICON_OPTIMIZATIONS "Enable optimizations for Apple Silicon" OFF)
+option(USE_APPLE_SILICON_OPTIMIZATIONS "Enable optimizations for Apple Silicon" ON)
 option(ENABLE_NEON "Enable NEON SIMD instructions" OFF)
 
 # Check for Apple Silicon

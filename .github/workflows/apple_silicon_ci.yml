@@ -15,13 +15,11 @@ jobs:
     - name: Create Build Directory
       run: mkdir -p build
       
-    - name: Configure CMake
+    - name: Configure & Build
       working-directory: ./build
-      run: cmake ..
-
-    - name: Build
-      working-directory: ./build
-      run: cmake --build .
+      run: |
+        cmake -S .. -B .
+        cmake --build .
       
     - name: List Build Artifacts
       working-directory: ./build

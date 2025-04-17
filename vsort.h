@@ -1,8 +1,6 @@
 /**
  * VSort: High-Performance Sorting Algorithm for Apple Silicon
  *
- * Version 0.4.0
- *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
  */
@@ -35,13 +33,24 @@ extern "C"
 #endif
 #endif
 
+// GCC/Clang restrict and branch‐prediction hints
+#if defined(__GNUC__) || defined(__clang__)
+#define VSORT_RESTRICT __restrict__
+#define VSORT_LIKELY(x) __builtin_expect(!!(x), 1)
+#define VSORT_UNLIKELY(x) __builtin_expect(!!(x), 0)
+#else
+#define VSORT_RESTRICT
+#define VSORT_LIKELY(x) (x)
+#define VSORT_UNLIKELY(x) (x)
+#endif
+
 /**
  * Version information
  */
 #define VSORT_VERSION_MAJOR 0
 #define VSORT_VERSION_MINOR 4
 #define VSORT_VERSION_PATCH 0
-#define VSORT_VERSION_STRING "0.4.0"
+#define VSORT_VERSION_STRING "0.5.0"
 
     /**
      * @brief Sorts an array of integers in ascending order.
@@ -54,7 +63,7 @@ extern "C"
      * @param arr The integer array to be sorted.
      * @param n The number of elements in the array.
      */
-    VSORT_API void vsort(int arr[], int n);
+    VSORT_API void vsort(int *VSORT_RESTRICT arr, int n) __attribute__((hot));
 
     /**
      * @brief Sorts an array of floats in ascending order.
@@ -68,7 +77,7 @@ extern "C"
      * @param arr The float array to be sorted.
      * @param n The number of elements in the array.
      */
-    VSORT_API void vsort_float(float arr[], int n);
+    VSORT_API void vsort_float(float *VSORT_RESTRICT arr, int n) __attribute__((hot));
 
     /**
      * @brief Sorts an array of chars in ascending order.
@@ -79,7 +88,7 @@ extern "C"
      * @param arr The char array to be sorted.
      * @param n The number of elements in the array.
      */
-    VSORT_API void vsort_char(char arr[], int n);
+    VSORT_API void vsort_char(char *VSORT_RESTRICT arr, int n) __attribute__((hot));
 
     /**
      * @brief Generic sorting function with a custom comparator.
@@ -94,7 +103,8 @@ extern "C"
      * @param size Size of each element in bytes.
      * @param compare Pointer to the comparison function (like qsort).
      */
-    VSORT_API void vsort_with_comparator(void *arr, int n, size_t size, int (*compare)(const void *, const void *));
+    VSORT_API void vsort_with_comparator(void *VSORT_RESTRICT arr, int n, size_t size,
+                                         int (*compare)(const void *, const void *)) __attribute__((hot));
 
     /**
      * @brief Gets the number of physical processor cores available.

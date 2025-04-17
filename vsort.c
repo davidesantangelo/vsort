@@ -4,8 +4,6 @@
  * A sorting library specifically optimized for Apple Silicon processors,
  * leveraging ARM NEON vector instructions and Grand Central Dispatch.
  *
- * Version 0.4.0
- *
  * @author Davide Santangelo <https://github.com/davidesantangelo>
  * @license MIT
  */
@@ -183,10 +181,12 @@ static void *vsort_aligned_malloc(size_t size);
 static void vsort_aligned_free(void *ptr);
 
 // Sorting Algorithms (Internal Implementations)
-static void swap_int(int *a, int *b);
-static void swap_float(float *a, float *b);
-static void insertion_sort_int(int arr[], int low, int high);
-static void insertion_sort_float(float arr[], int low, int high);
+static inline void swap_int(int *a, int *b);
+static inline void swap_float(float *a, float *b);
+static inline void insertion_sort_int(int *VSORT_RESTRICT arr, int low, int high)
+    __attribute__((always_inline, hot));
+static inline void insertion_sort_float(float *VSORT_RESTRICT arr, int low, int high)
+    __attribute__((always_inline, hot));
 static int partition_int(int arr[], int low, int high);
 static int partition_float(float arr[], int low, int high);
 static void quicksort_int(int arr[], int low, int high);
@@ -635,7 +635,7 @@ static inline void swap_float(float *a, float *b)
 }
 
 // Insertion Sort (Int)
-static void insertion_sort_int(int arr[], int low, int high)
+static inline void insertion_sort_int(int *VSORT_RESTRICT arr, int low, int high)
 {
     for (int i = low + 1; i <= high; i++)
     {
@@ -653,7 +653,7 @@ static void insertion_sort_int(int arr[], int low, int high)
 }
 
 // Insertion Sort (Float)
-static void insertion_sort_float(float arr[], int low, int high)
+static inline void insertion_sort_float(float *VSORT_RESTRICT arr, int low, int high)
 {
     for (int i = low + 1; i <= high; i++)
     {
@@ -687,12 +687,9 @@ static int partition_int(int arr[], int low, int high)
     int pivot = arr[high];
     int i = low - 1; // Index of smaller element
 
-    // TODO: Potential NEON optimization point (Suggestion 1c)
-    // Compare blocks of elements against pivot using NEON.
-
     for (int j = low; j < high; j++)
     {
-        if (arr[j] <= pivot)
+        if (VSORT_LIKELY(arr[j] <= pivot))
         {
             i++;
             if (i != j)
@@ -719,7 +716,6 @@ static int partition_float(float arr[], int low, int high)
     float pivot = arr[high];
     int i = low - 1; // Index of smaller element
 
-    // TODO: Potential NEON optimization point for floats
     for (int j = low; j < high; j++)
     {
         if (arr[j] <= pivot)
@@ -988,7 +984,6 @@ static void radix_sort_int(int arr[], int n)
         memset(count, 0, sizeof(count));
 
         // Count occurrences of each byte value from current_input
-        // TODO: Potential NEON optimization point (Suggestion 1d)
         for (int i = 0; i < n; i++)
         {
             unsigned int bin_index = (current_input[i] >> bit_shift) & mask;
@@ -1019,7 +1014,6 @@ static void radix_sort_int(int arr[], int n)
     // Undo shift and copy back to original int array
     for (int i = 0; i < n; ++i)
     {
-        // Subtract shift amount carefully
         arr[i] = (int)(current_input[i] - shift_amount);
     }
 
@@ -1051,9 +1045,6 @@ static void merge_sorted_arrays_int(int arr[], int temp[], int left, int mid, in
 
     int *p_left_end = p_left + left_size;    // End marker for left part
     int *p_right_end = p_right + right_size; // End marker for right part
-
-    // TODO: Potential NEON optimization point (Suggestion 1b)
-    // Load vectors from p_left and p_right, compare, blend, store to p_dest
 
     // Merge the temp arrays back into arr[left..right] using pointers
     while (p_left < p_left_end && p_right < p_right_end)
@@ -1103,7 +1094,6 @@ static void merge_sorted_arrays_float(float arr[], float temp[], int left, int m
     float *p_left_end = p_left + left_size;
     float *p_right_end = p_right + right_size;
 
-    // TODO: Potential NEON optimization point for floats
     while (p_left < p_left_end && p_right < p_right_end)
     {
         // Handle NaN comparisons if necessary according to desired sort order
@@ -1287,16 +1277,13 @@ static void vsort_parallel_int(int *arr, int size)
           if (mid < right)
           {
               // Use the standard merge function (which is internally sequential).
-              // TODO: Implement NEON-accelerated merge here (Suggestion 1b)
               merge_sorted_arrays_int(arr, temp, left, mid, right);
           }
           else
           {
-              // This case should ideally not be reached if num_merges is calculated correctly
               vsort_log_debug("Skipping merge for index %zu (left=%d, mid=%d, right=%d)", i, left, mid, right);
           }
         });
-        // dispatch_apply automatically waits for all tasks to complete before proceeding
         vsort_log_debug("Merge tasks complete for width %d", width);
 
     } // End width loop
@@ -1315,7 +1302,6 @@ static void vsort_parallel_int(int *arr, int size)
         {
             vsort_log_error("Final array validation failed (int) at index %d: %d > %d", i, arr[i - 1], arr[i]);
             fully_sorted = false;
-            // break; // Stop at first error
         }
     }
     if (fully_sorted)
@@ -1407,7 +1393,6 @@ static void vsort_parallel_float(float *arr, int size)
 
           if (mid < right)
           {
-              // TODO: Implement NEON-accelerated merge for floats
               merge_sorted_arrays_float(arr, temp, left, mid, right);
           }
         });
@@ -1424,10 +1409,8 @@ static void vsort_parallel_float(float *arr, int size)
     {
         if (arr[i] < arr[i - 1])
         {
-            // Handle NaN comparisons carefully if needed
             vsort_log_error("Final array validation failed (float) at index %d: %f > %f", i, arr[i - 1], arr[i]);
             fully_sorted = false;
-            // break;
         }
     }
     if (fully_sorted)
@@ -1489,7 +1472,6 @@ static void vsort_sequential_float(float *arr, int size)
     }
 
     // Radix sort is not typically used for floats. Default to quicksort.
-    // TODO: Could implement float-specific radix sort (complex) if needed.
     quicksort_float(arr, 0, size - 1);
 }
 
@@ -1509,7 +1491,6 @@ static int get_physical_core_count(void)
         nprocs = sysconf(_SC_NPROCESSORS_CONF);
         if (nprocs < 1)
         {
-            // Don't log here, might be called before logger init
             return 1; // Fallback to 1 core
         }
 #else
@@ -1590,8 +1571,6 @@ VSORT_API void vsort_char(char arr[], int n)
     if (!arr || n <= 1)
         return;
     vsort_log_debug("Starting vsort (char) for %d elements (using qsort fallback).", n);
-    // TODO: Implement optimized char sort based on internal logic (Suggestion 5)
-    // Could use radix sort (treating chars as 8-bit ints) or quicksort.
     qsort(arr, n, sizeof(char), default_char_comparator);
     vsort_log_debug("vsort (char) completed for %d elements.", n);
 }
@@ -1602,16 +1581,12 @@ VSORT_API void vsort_with_comparator(void *arr, int n, size_t size, int (*compar
     if (!arr || n <= 1 || size == 0 || !compare)
         return;
     vsort_log_debug("Starting vsort (generic) for %d elements, size %zu (using qsort fallback).", n, size);
-    // TODO: Implement optimized generic sort (Suggestion 5)
-    // This would require adapting quicksort/merge to use the comparator
-    // and potentially function pointers or macros. It's non-trivial.
     qsort(arr, n, size, compare);
     vsort_log_debug("vsort (generic) completed for %d elements.", n);
 }
 
 VSORT_API int get_num_processors(void)
 {
-    // Don't strictly need init for this, but ensures consistency if called before sort
     if (!vsort_library_initialized)
     {
         return get_physical_core_count(); // Get raw count if not initialized

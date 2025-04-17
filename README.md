@@ -12,7 +12,6 @@ VSort is a high-performance sorting library designed to leverage the unique arch
 - [Usage](#usage)
 - [Building & Testing](#building-and-testing)
 - [Technical Details](#technical-details)
-- [Development](#development)
 
 ## Features & Optimizations
 
@@ -192,25 +191,9 @@ vsort(array, size);
 ### Building the Library
 
 ```bash
-# Clone the repository
-git clone https://github.com/davidesantangelo/vsort.git
-cd vsort
-
-# Option 1: Use CMake (recommended for cross-platform)
-mkdir build
-cd build
-cmake ..
+mkdir -p build && cd build
+cmake -S .. -B .
 cmake --build .
-
-# Option 2: Use Makefile (simpler for Unix-like systems)
-make
-
-# Option 3: Use the build script (for quick builds on macOS)
-./build_script.sh
-
-# Run all tests
-make test   # If using make
-ctest       # If using CMake
 ```
 
 CMake automatically detects your hardware and applies appropriate optimizations:
@@ -294,24 +277,6 @@ VSort automatically optimizes for:
 - **Memory constraints**: Balance between memory usage and speed
 
 VSort's dynamic threshold adjustment means that the library works optimally without manual configuration, but advanced users can still override settings if needed.
-
-## Development
-
-### Roadmap
-
-Key areas for future improvement:
-
-1. **Implement NEON Vectorization**: Critical for maximizing performance. Implement NEON intrinsics within merge_sorted_arrays_* and potentially partition_* and radix_sort_int.
-
-2. **Advanced Parallel Merge**: Explore and implement more sophisticated parallel merge algorithms beyond simple parallel dispatch (e.g., recursive parallel merge, multi-way merge) to potentially reduce synchronization overhead or improve load balancing, especially if the internal merge becomes vectorized.
-
-3. **Branch Prediction Improvements**: Investigate techniques (e.g., conditional moves, __builtin_expect) to reduce branch mispredictions in comparison-heavy sections.
-
-4. **Optimize Generic Sorts**: Implement optimized versions of vsort_char and vsort_with_comparator using the internal sorting framework instead of falling back to qsort.
-
-5. **Cache-Line Aware Merge/Partition**: Further refine merge/partition logic to explicitly minimize cache line splits and improve data locality during SIMD operations.
-
-6. **Enhanced P/E Core Scheduling**: Revisit intelligent workload distribution if performance analysis shows simple QoS is insufficient.
 
 ### License
 

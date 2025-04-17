@@ -38,7 +38,8 @@ else
 fi
 
 # Standard compiler flags with SDK path
-CFLAGS="-O3 -Wall -DVSORT_VERSION=\"0.4.0\" -I. $SDK_FLAGS"
+CFLAGS="-O3 -ffast-math -march=native -fomit-frame-pointer -flto -Wall -DVSORT_VERSION=\"0.5.0\" -I. $SDK_FLAGS"
+LDFLAGS="-flto"
 
 # Detect if running on Apple Silicon
 if [ "$(uname -m)" = "arm64" ]; then
@@ -59,14 +60,14 @@ ar rcs libvsort.a vsort.o vsort_logger.o
 
 echo "Building tests..."
 # Build test_basic with the same flags
-clang $CFLAGS -o tests/test_basic tests/test_basic.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
+clang $CFLAGS $LDFLAGS -o tests/test_basic tests/test_basic.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
 
 # Build other tests as needed
-# clang $CFLAGS -o tests/test_performance tests/test_performance.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
-# clang $CFLAGS -o tests/test_apple_silicon tests/test_apple_silicon.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
+# clang $CFLAGS $LDFLAGS -o tests/test_performance tests/test_performance.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
+# clang $CFLAGS $LDFLAGS -o tests/test_apple_silicon tests/test_apple_silicon.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
 
 echo "Building examples..."
 # Build basic example
-clang $CFLAGS -o examples/basic_example examples/basic_example.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
+clang $CFLAGS $LDFLAGS -o examples/basic_example examples/basic_example.c -framework Foundation -framework CoreFoundation -L. -lvsort -lm
 
 echo "Build completed successfully!"
