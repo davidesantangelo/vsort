@@ -181,12 +181,18 @@ static void *vsort_aligned_malloc(size_t size);
 static void vsort_aligned_free(void *ptr);
 
 // Sorting Algorithms (Internal Implementations)
-static inline void swap_int(int *a, int *b);
-static inline void swap_float(float *a, float *b);
+
+// Forward-declare insertion sorts with attributes only on GCC/Clang
+#if defined(__GNUC__) || defined(__clang__)
 static inline void insertion_sort_int(int *VSORT_RESTRICT arr, int low, int high)
     __attribute__((always_inline, hot));
 static inline void insertion_sort_float(float *VSORT_RESTRICT arr, int low, int high)
     __attribute__((always_inline, hot));
+#else
+static inline void insertion_sort_int(int *VSORT_RESTRICT arr, int low, int high);
+static inline void insertion_sort_float(float *VSORT_RESTRICT arr, int low, int high);
+#endif
+
 static int partition_int(int arr[], int low, int high);
 static int partition_float(float arr[], int low, int high);
 static void quicksort_int(int arr[], int low, int high);

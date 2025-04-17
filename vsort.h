@@ -44,6 +44,13 @@ extern "C"
 #define VSORT_UNLIKELY(x) (x)
 #endif
 
+// Add hot‐attribute macro for portability
+#if defined(_MSC_VER)
+#define VSORT_HOT
+#else
+#define VSORT_HOT __attribute__((hot))
+#endif
+
 /**
  * Version information
  */
@@ -63,7 +70,7 @@ extern "C"
      * @param arr The integer array to be sorted.
      * @param n The number of elements in the array.
      */
-    VSORT_API void vsort(int *VSORT_RESTRICT arr, int n) __attribute__((hot));
+    VSORT_API void vsort(int *VSORT_RESTRICT arr, int n) VSORT_HOT;
 
     /**
      * @brief Sorts an array of floats in ascending order.
@@ -77,7 +84,7 @@ extern "C"
      * @param arr The float array to be sorted.
      * @param n The number of elements in the array.
      */
-    VSORT_API void vsort_float(float *VSORT_RESTRICT arr, int n) __attribute__((hot));
+    VSORT_API void vsort_float(float *VSORT_RESTRICT arr, int n) VSORT_HOT;
 
     /**
      * @brief Sorts an array of chars in ascending order.
@@ -88,7 +95,7 @@ extern "C"
      * @param arr The char array to be sorted.
      * @param n The number of elements in the array.
      */
-    VSORT_API void vsort_char(char *VSORT_RESTRICT arr, int n) __attribute__((hot));
+    VSORT_API void vsort_char(char *VSORT_RESTRICT arr, int n) VSORT_HOT;
 
     /**
      * @brief Generic sorting function with a custom comparator.
@@ -104,7 +111,7 @@ extern "C"
      * @param compare Pointer to the comparison function (like qsort).
      */
     VSORT_API void vsort_with_comparator(void *VSORT_RESTRICT arr, int n, size_t size,
-                                         int (*compare)(const void *, const void *)) __attribute__((hot));
+                                         int (*compare)(const void *, const void *)) VSORT_HOT;
 
     /**
      * @brief Gets the number of physical processor cores available.
