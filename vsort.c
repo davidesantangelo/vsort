@@ -21,7 +21,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdatomic.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +35,7 @@
 #if defined(_WIN32) || defined(_MSC_VER)
 #include <windows.h>
 #else
+#include <stdatomic.h>
 #include <sched.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -119,8 +119,12 @@ static vsort_runtime_t g_runtime = {
     .log_level = VSORT_LOG_WARNING,
     .logger_ready = false};
 
+#if defined(_WIN32) || defined(_MSC_VER)
+static INIT_ONCE g_runtime_once = INIT_ONCE_STATIC_INIT;
+#else
 static atomic_bool g_runtime_init_requested = ATOMIC_VAR_INIT(false);
 static atomic_bool g_runtime_ready = ATOMIC_VAR_INIT(false);
+#endif
 
 static vsort_runtime_t *vsort_runtime(void);
 static void vsort_runtime_initialize(void);
@@ -438,9 +442,26 @@ static void vsort_runtime_initialize(void)
                     rt->thresholds.radix_threshold,
                     rt->thresholds.cache_optimal_elements);
 
+#if !defined(_WIN32) && !defined(_MSC_VER)
     atomic_store(&g_runtime_ready, true);
+#endif
 }
 
+#if defined(_WIN32) || defined(_MSC_VER)
+static BOOL CALLBACK vsort_runtime_once_callback(PINIT_ONCE once, PVOID param, PVOID *context)
+{
+    VSORT_UNUSED(once);
+    VSORT_UNUSED(param);
+    VSORT_UNUSED(context);
+    vsort_runtime_initialize();
+    return TRUE;
+}
+
+VSORT_API void vsort_init(void)
+{
+    InitOnceExecuteOnce(&g_runtime_once, vsort_runtime_once_callback, NULL, NULL);
+}
+#else
 VSORT_API void vsort_init(void)
 {
     bool expected = false;
@@ -452,14 +473,11 @@ VSORT_API void vsort_init(void)
     {
         while (!atomic_load(&g_runtime_ready))
         {
-#if defined(_WIN32) || defined(_MSC_VER)
-            Sleep(0);
-#else
             sched_yield();
-#endif
         }
     }
 }
+#endif
 
 // -----------------------------------------------------------------------------
 // Memory helpers

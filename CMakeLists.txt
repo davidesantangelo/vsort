@@ -38,8 +38,11 @@ check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
 if(ipo_supported)
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
-set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -Ofast -march=native -fomit-frame-pointer -flto -ffast-math")
-set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto")
+
+if(NOT MSVC)
+    set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} -Ofast -march=native -fomit-frame-pointer -flto -ffast-math")
+    set(CMAKE_EXE_LINKER_FLAGS_RELEASE "${CMAKE_EXE_LINKER_FLAGS_RELEASE} -flto")
+endif()
 
 # Add logger source files
 set(VSORT_SOURCES vsort.c vsort_logger.c)
@@ -100,10 +103,10 @@ endif()
 if(MSVC)
     # MSVC (Visual Studio) compiler flags
     target_compile_options(vsort PRIVATE 
+        /std:c17        # Enable C17 mode for proper headers
         /O2             # Optimize for speed
         /Ob2            # Inline function expansion
         /Oi             # Enable intrinsic functions
-        /Ot             # Favor fast code
         /Gy             # Function-level linking
         /fp:fast        # Fast floating point model
     )
@@ -161,6 +164,7 @@ foreach(example ${EXAMPLES})
     # Add Windows-specific configurations for examples
     if(MSVC)
         target_compile_options(${example} PRIVATE 
+            /std:c17        # Match library C standard
             /O2             # Optimize for speed
             /fp:fast        # Fast floating point model
         )
@@ -187,6 +191,7 @@ foreach(test ${TESTS})
     # Add Windows-specific configurations for tests
     if(MSVC)
         target_compile_options(${test} PRIVATE 
+            /std:c17        # Match library C standard
             /O2             # Optimize for speed
             /fp:fast        # Fast floating point model
         )
