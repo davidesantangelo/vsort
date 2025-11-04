@@ -13,6 +13,14 @@ VSort is a high-performance sorting library designed to leverage the unique arch
 - [Building & Testing](#building-and-testing)
 - [Technical Details](#technical-details)
 
+## What's New in 1.0.0
+
+- **Unified runtime API** &mdash; configure behaviour through `vsort_options_t`, feature flags, and new helper utilities like `vsort_sort`, `vsort_default_flags`, and `vsort_set_default_flags`.
+- **Hybrid sorting core** &mdash; adaptive introsort with heapsort fallback, fast insertion sort for nearly-sorted data, and optional LSD radix sort for large integer workloads.
+- **Stable + specialised paths** &mdash; opt into stable merge sort via `VSORT_FLAG_FORCE_STABLE` and benefit from a counting-sort fast path for byte arrays.
+- **Optimised parallelism** &mdash; redesigned Apple Silicon pipeline that chunk-sorts in parallel and performs batched merge passes using Grand Central Dispatch.
+- **Thread-safe initialisation** &mdash; hardware calibration now happens exactly once via atomic guards, ensuring safe use from multi-threaded applications.
+
 ## Features & Optimizations
 
 ### Apple Silicon Optimizations
@@ -41,15 +49,11 @@ VSort's optimizations are designed to maximize performance on Apple Silicon, wit
 
 Recent updates have further enhanced VSort's reliability and performance:
 
-1. **Dynamic Threshold Adjustment**: The new auto-tuning system detects hardware characteristics and automatically calibrates sorting thresholds for optimal performance on any device
-2. **Hardware-Aware Optimization**: Added detection of CPU model, cache hierarchy, and core types to make intelligent performance decisions
-3. **Improved Error Recovery**: The parallel merge implementation now includes robust validation with automatic error recovery
-4. **Enhanced Memory Management**: Better handling of memory alignment for SIMD operations
-5. **Optimized Build System**: Simplified build process with proper architecture detection and compiler flags
-6. **Increased Stability**: Fixed boundary cases and edge conditions in parallel sorting
-7. **Cleaner Codebase**: Fixed compiler warnings and improved code maintainability
-8. **Robust Testing**: Enhanced performance tests to avoid memory issues with large arrays
-9. **Parallel Merge Dispatch**: Merge passes in parallel sort now dispatch merge operations concurrently using GCD's dispatch_apply, replacing the previous sequential merge loop. (Note: The underlying `merge_sorted_arrays_*` function is still sequential internally).
+1. **Configurable runtime API**: Every entry point now funnels through `vsort_sort`, enabling per-call tuning and default policy overrides.
+2. **Hybrid algorithm engine**: Adaptive introsort with heapsort fallback, nearly-sorted detection, and optional stable merge sort mode.
+3. **Specialised fast paths**: Counting sort accelerates byte arrays, while tuned LSD radix sort speeds up large integer ranges.
+4. **Thread-safe initialisation**: Hardware calibration leverages atomic guards, making the library safe in multi-threaded contexts.
+5. **Parallel pipeline refresh**: Apple Silicon builds now chunk-sort and merge in parallel with reduced allocation pressure.
 
 
 ### Key Technical Features
@@ -241,15 +245,14 @@ The project includes several example programs demonstrating different use cases:
 
 The latest version of VSort includes several key optimizations:
 
-1. **Dynamic Threshold Adjustment**: Automatically detects CPU model, cache sizes, and core configuration to set optimal thresholds for insertion sort, vectorization, parallel processing, and radix sort
-2. **Enhanced Hardware Detection**: Recognizes Apple Silicon processors and adjusts for their unique characteristics, with fallbacks for other platforms
-3. **P/E Core Workload Optimization**: Analyzes chunk complexity to distribute work optimally between performance and efficiency cores
-4. **Cache-Aware Processing**: Calibrates sorting parameters based on detected L1, L2, and L3 cache sizes to minimize cache misses
-5. **Enhanced NEON Vectorization**: Complete SIMD implementation for partitioning and merging that processes 4 integers at once, with specialized fast paths for homogeneous data segments
-6. **Adaptive Algorithm Selection**: Specialized handling for different data patterns with fast-path optimizations
-7. **Optimized Thread Management**: Better work distribution based on array size and core characteristics
-8. **Cache Line Alignment**: Memory access patterns aligned with Apple Silicon's cache architecture
-9. **Compiler-specific Optimization Flags**: Taking advantage of Clang's Apple Silicon optimizations
+1. **Adaptive algorithm engine**: Hybrid introsort with heapsort fallback, insertion sort for small or nearly-sorted ranges, and optional LSD radix sort for large integer data sets.
+2. **Configurable runtime**: Feature flags and the `vsort_options_t` struct let callers toggle parallelism, radix sorting, and stable ordering per invocation.
+3. **Thread-safe hardware calibration**: Atomic guards guarantee that cache and core detection occurs exactly once, even under concurrent first-use scenarios.
+4. **Parallel pipeline refresh**: Apple Silicon builds chunk-sort in parallel and merge via batched dispatch passes, reducing memory churn and improving throughput.
+5. **Specialised fast paths**: Stable merge sort activates via `VSORT_FLAG_FORCE_STABLE`, while byte arrays use a dedicated counting sort.
+6. **Cache-aware thresholds**: L1/L2 cache data inform insertion, merge, and parallel thresholds for better locality.
+7. **Detailed logging**: Consolidated runtime logging provides insight into detected hardware, calibrated thresholds, and fallback decisions.
+8. **Cross-platform resilience**: Improved guardrails prevent radix overflow and ensure deterministic ordering for custom comparators.
 
 ### Computational Complexity
 

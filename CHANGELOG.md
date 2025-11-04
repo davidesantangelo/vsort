@@ -4,6 +4,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2025-11-04
+
+### Added
+- Unified configuration API with `vsort_options_t`, feature flags, and result codes
+- New `vsort_sort` entry point plus helpers to query and set default behaviour
+- Stable merge sort mode and counting sort fast path for byte arrays
+- Parallel introsort pipeline with chunked merging on Apple Silicon devices
+
+### Changed
+- Replaced legacy quicksort driver with adaptive introsort + heapsort fallback
+- Refactored runtime into a calibrated hardware profile with thread-safe init
+- Simplified radix sort guardrails and nearly-sorted detection heuristics
+- Default parallel and radix policies now configurable per-call
+
+### Fixed
+- Prevented radix overflow on very large integer ranges
+- Guaranteed deterministic comparator handling for generic dispatch
+- Eliminated redundant memory allocations in merge passes
+
 ## [0.3.4] - 2025-03-23
 
 ### Added

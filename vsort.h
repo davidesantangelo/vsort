@@ -54,10 +54,49 @@ extern "C"
 /**
  * Version information
  */
-#define VSORT_VERSION_MAJOR 0
-#define VSORT_VERSION_MINOR 4
+#define VSORT_VERSION_MAJOR 1
+#define VSORT_VERSION_MINOR 0
 #define VSORT_VERSION_PATCH 0
-#define VSORT_VERSION_STRING "0.5.0"
+#define VSORT_VERSION_STRING "1.0.0"
+
+// -----------------------------------------------------------------------------
+// Public configuration API
+// -----------------------------------------------------------------------------
+
+typedef enum
+{
+    VSORT_KIND_INT32 = 0,
+    VSORT_KIND_FLOAT32,
+    VSORT_KIND_CHAR8,
+    VSORT_KIND_GENERIC
+} vsort_data_kind_t;
+
+typedef enum
+{
+    VSORT_OK = 0,
+    VSORT_ERR_INVALID_ARGUMENT = -1,
+    VSORT_ERR_ALLOCATION_FAILED = -2,
+    VSORT_ERR_UNSUPPORTED_TYPE = -3
+} vsort_result_t;
+
+#define VSORT_FLAG_ALLOW_PARALLEL (1u << 0)
+#define VSORT_FLAG_ALLOW_RADIX (1u << 1)
+#define VSORT_FLAG_FORCE_STABLE (1u << 2)
+
+typedef struct
+{
+    void *data;                              /**< Pointer to the data to be sorted */
+    size_t length;                           /**< Number of elements in the buffer */
+    size_t element_size;                     /**< Size of each element (bytes) */
+    vsort_data_kind_t kind;                  /**< Data classification */
+    int (*comparator)(const void *, const void *); /**< Comparator for generic paths */
+    unsigned int flags;                      /**< Behavioural flags (VSORT_FLAG_*) */
+} vsort_options_t;
+
+VSORT_API vsort_result_t vsort_sort(const vsort_options_t *options);
+VSORT_API void vsort_set_default_flags(unsigned int flags);
+VSORT_API unsigned int vsort_default_flags(void);
+VSORT_API const char *vsort_version(void);
 
     /**
      * @brief Sorts an array of integers in ascending order.
