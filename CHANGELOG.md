@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-01-15
+
+### Added
+- Throughput/efficiency tuning flags (`VSORT_FLAG_PREFER_THROUGHPUT`, `VSORT_FLAG_PREFER_EFFICIENCY`)
+- Optional SIMD enforcement flag for Apple Silicon fast paths
+- Parallel merge stress coverage in Apple Silicon tests
+
+### Changed
+- Reused merge buffers across runs to reduce allocation overhead
+- Parallel merge skips already ordered segments for energy/latency wins
+- Calibrated parallel threshold with P-core ratio and larger sample sizes
+- NEON-accelerated merge/partition helpers for Apple Silicon throughput
+
 ## [1.0.0] - 2025-11-04
 
 ### Added

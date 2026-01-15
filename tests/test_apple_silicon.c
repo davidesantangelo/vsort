@@ -151,6 +151,39 @@ static int test_parallel_sorting()
     return 1;
 }
 
+static int test_parallel_merge_stress()
+{
+    printf("Testing parallel merge stress... ");
+
+    int n = 750000;
+    int *arr = create_random_array(n);
+    if (!arr)
+    {
+        printf("FAILED: Memory allocation error\n");
+        return 0;
+    }
+
+    for (int i = 0; i < n; i += 2)
+    {
+        int tmp = arr[i];
+        arr[i] = arr[i + 1];
+        arr[i + 1] = tmp;
+    }
+
+    vsort(arr, n);
+
+    if (!is_sorted(arr, n))
+    {
+        printf("FAILED: Parallel merge produced unsorted output\n");
+        free(arr);
+        return 0;
+    }
+
+    printf("PASSED\n");
+    free(arr);
+    return 1;
+}
+
 int main()
 {
     printf("Running Apple Silicon specific tests...\n\n");
@@ -165,6 +198,7 @@ int main()
     int passed = 1;
     passed &= test_vectorization_threshold();
     passed &= test_parallel_sorting();
+    passed &= test_parallel_merge_stress();
 
     printf("\nApple Silicon specific test summary: %s\n",
            passed ? "ALL PASSED" : "SOME TESTS FAILED");

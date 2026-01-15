@@ -45,6 +45,10 @@
 #endif
 #endif
 
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+#include <arm_neon.h>
+#endif
+
 #define VSORT_ALIGN 16
 #define VSORT_UNUSED(x) ((void)(x))
 #define VSORT_MIN(a, b) ((a) < (b) ? (a) : (b))
@@ -89,11 +93,27 @@ typedef struct
 
 typedef struct
 {
+    size_t int_size;
+    int *int_buffer;
+    size_t float_size;
+    float *float_buffer;
+#if defined(_WIN32) || defined(_MSC_VER)
+    volatile LONG int_in_use;
+    volatile LONG float_in_use;
+#else
+    atomic_flag int_in_use;
+    atomic_flag float_in_use;
+#endif
+} vsort_merge_pool_t;
+
+typedef struct
+{
     vsort_thresholds_t thresholds;
     vsort_hardware_t hardware;
     unsigned int default_flags;
     vsort_log_level_t log_level;
     bool logger_ready;
+    vsort_merge_pool_t merge_pool;
 } vsort_runtime_t;
 
 static vsort_runtime_t g_runtime = {
@@ -115,9 +135,15 @@ static vsort_runtime_t g_runtime = {
         .has_neon = false,
         .has_simd = false,
         .cpu_model = "Generic CPU"},
-    .default_flags = VSORT_FLAG_ALLOW_PARALLEL | VSORT_FLAG_ALLOW_RADIX,
+    .default_flags = VSORT_FLAG_ALLOW_PARALLEL | VSORT_FLAG_ALLOW_RADIX | VSORT_FLAG_PREFER_THROUGHPUT,
     .log_level = VSORT_LOG_WARNING,
-    .logger_ready = false};
+    .logger_ready = false,
+#if defined(_WIN32) || defined(_MSC_VER)
+    .merge_pool = {.int_size = 0, .int_buffer = NULL, .float_size = 0, .float_buffer = NULL, .int_in_use = 0, .float_in_use = 0},
+#else
+    .merge_pool = {.int_size = 0, .int_buffer = NULL, .float_size = 0, .float_buffer = NULL, .int_in_use = ATOMIC_FLAG_INIT, .float_in_use = ATOMIC_FLAG_INIT},
+#endif
+};
 
 #if defined(_WIN32) || defined(_MSC_VER)
 static INIT_ONCE g_runtime_once = INIT_ONCE_STATIC_INIT;
@@ -143,9 +169,9 @@ static void vsort_insertion_sort_float32(float *data, size_t count);
 static void vsort_heapsort_int32(int *data, size_t count);
 static void vsort_heapsort_float32(float *data, size_t count);
 
-static void vsort_introsort_int32_impl(int *data, size_t count, size_t depth_limit);
+static void vsort_introsort_int32_impl(int *data, size_t count, size_t depth_limit, unsigned int flags);
 static void vsort_introsort_float32_impl(float *data, size_t count, size_t depth_limit);
-static void vsort_introsort_int32(int *data, size_t count);
+static void vsort_introsort_int32(int *data, size_t count, unsigned int flags);
 static void vsort_introsort_float32(float *data, size_t count);
 
 static bool vsort_mergesort_int32(int *data, size_t count);
@@ -161,8 +187,14 @@ static bool vsort_is_nearly_sorted_int32(const int *data, size_t count, size_t s
 static bool vsort_is_nearly_sorted_float32(const float *data, size_t count, size_t sample_hint);
 
 static size_t vsort_floor_log2(size_t value);
-static size_t vsort_partition_int32(int *data, size_t count);
+static size_t vsort_partition_int32(int *data, size_t count, unsigned int flags);
 static size_t vsort_partition_float32(float *data, size_t count);
+
+static int *vsort_merge_buffer_int32(size_t count);
+static void vsort_merge_buffer_release_int32(void);
+static float *vsort_merge_buffer_float32(size_t count);
+static void vsort_merge_buffer_release_float32(void);
+static void vsort_merge_pool_release(void);
 
 #if defined(VSORT_APPLE) && defined(__arm64__)
 static bool vsort_parallel_int32(int *data, size_t count, unsigned int flags);
@@ -369,13 +401,16 @@ static void vsort_calibrate_thresholds(vsort_runtime_t *rt)
     insertion = VSORT_CLAMP(insertion, 16, 64);
     th->insertion_threshold = insertion;
 
-    size_t sample = VSORT_CLAMP(insertion * 4, 32, 256);
+    size_t sample = VSORT_CLAMP(insertion * 6, 48, 256);
     th->sample_size = sample;
 
     size_t parallel = l2 / sizeof(int);
     if (parallel < (size_t)1 << 15)
         parallel = (size_t)1 << 15;
     size_t effective_cores = (size_t)VSORT_MAX(1, hw->performance_cores);
+    size_t total_cores = (size_t)VSORT_MAX(1, hw->total_cores);
+    float perf_ratio = (float)effective_cores / (float)total_cores;
+    parallel = (size_t)((float)parallel * perf_ratio);
     parallel *= effective_cores;
     if (parallel > (size_t)1 << 22)
         parallel = (size_t)1 << 22;
@@ -442,6 +477,18 @@ static void vsort_runtime_initialize(void)
                     rt->thresholds.radix_threshold,
                     rt->thresholds.cache_optimal_elements);
 
+    rt->merge_pool.int_size = 0;
+    rt->merge_pool.int_buffer = NULL;
+    rt->merge_pool.float_size = 0;
+    rt->merge_pool.float_buffer = NULL;
+#if defined(_WIN32) || defined(_MSC_VER)
+    rt->merge_pool.int_in_use = 0;
+    rt->merge_pool.float_in_use = 0;
+#else
+    atomic_flag_clear(&rt->merge_pool.int_in_use);
+    atomic_flag_clear(&rt->merge_pool.float_in_use);
+#endif
+
 #if !defined(_WIN32) && !defined(_MSC_VER)
     atomic_store(&g_runtime_ready, true);
 #endif
@@ -460,6 +507,12 @@ static BOOL CALLBACK vsort_runtime_once_callback(PINIT_ONCE once, PVOID param, P
 VSORT_API void vsort_init(void)
 {
     InitOnceExecuteOnce(&g_runtime_once, vsort_runtime_once_callback, NULL, NULL);
+    static bool release_registered = false;
+    if (!release_registered)
+    {
+        atexit(vsort_merge_pool_release);
+        release_registered = true;
+    }
 }
 #else
 VSORT_API void vsort_init(void)
@@ -468,6 +521,7 @@ VSORT_API void vsort_init(void)
     if (atomic_compare_exchange_strong(&g_runtime_init_requested, &expected, true))
     {
         vsort_runtime_initialize();
+        atexit(vsort_merge_pool_release);
     }
     else
     {
@@ -513,6 +567,104 @@ static void vsort_aligned_free(void *ptr)
     _aligned_free(ptr);
 #else
     free(ptr);
+#endif
+}
+
+static void vsort_merge_pool_release(void)
+{
+    vsort_runtime_t *rt = vsort_runtime();
+    vsort_aligned_free(rt->merge_pool.int_buffer);
+    vsort_aligned_free(rt->merge_pool.float_buffer);
+    rt->merge_pool.int_buffer = NULL;
+    rt->merge_pool.float_buffer = NULL;
+    rt->merge_pool.int_size = 0;
+    rt->merge_pool.float_size = 0;
+#if defined(_WIN32) || defined(_MSC_VER)
+    rt->merge_pool.int_in_use = 0;
+    rt->merge_pool.float_in_use = 0;
+#else
+    atomic_flag_clear(&rt->merge_pool.int_in_use);
+    atomic_flag_clear(&rt->merge_pool.float_in_use);
+#endif
+}
+
+static int *vsort_merge_buffer_int32(size_t count)
+{
+    vsort_runtime_t *rt = vsort_runtime();
+#if defined(_WIN32) || defined(_MSC_VER)
+    if (InterlockedExchange(&rt->merge_pool.int_in_use, 1) != 0)
+        return NULL;
+#else
+    if (atomic_flag_test_and_set(&rt->merge_pool.int_in_use))
+        return NULL;
+#endif
+
+    if (rt->merge_pool.int_size < count)
+    {
+        vsort_aligned_free(rt->merge_pool.int_buffer);
+        rt->merge_pool.int_buffer = vsort_aligned_malloc(count * sizeof(int));
+        if (!rt->merge_pool.int_buffer)
+        {
+            rt->merge_pool.int_size = 0;
+#if defined(_WIN32) || defined(_MSC_VER)
+            InterlockedExchange(&rt->merge_pool.int_in_use, 0);
+#else
+            atomic_flag_clear(&rt->merge_pool.int_in_use);
+#endif
+            return NULL;
+        }
+        rt->merge_pool.int_size = count;
+    }
+    return rt->merge_pool.int_buffer;
+}
+
+static void vsort_merge_buffer_release_int32(void)
+{
+    vsort_runtime_t *rt = vsort_runtime();
+#if defined(_WIN32) || defined(_MSC_VER)
+    InterlockedExchange(&rt->merge_pool.int_in_use, 0);
+#else
+    atomic_flag_clear(&rt->merge_pool.int_in_use);
+#endif
+}
+
+static float *vsort_merge_buffer_float32(size_t count)
+{
+    vsort_runtime_t *rt = vsort_runtime();
+#if defined(_WIN32) || defined(_MSC_VER)
+    if (InterlockedExchange(&rt->merge_pool.float_in_use, 1) != 0)
+        return NULL;
+#else
+    if (atomic_flag_test_and_set(&rt->merge_pool.float_in_use))
+        return NULL;
+#endif
+
+    if (rt->merge_pool.float_size < count)
+    {
+        vsort_aligned_free(rt->merge_pool.float_buffer);
+        rt->merge_pool.float_buffer = vsort_aligned_malloc(count * sizeof(float));
+        if (!rt->merge_pool.float_buffer)
+        {
+            rt->merge_pool.float_size = 0;
+#if defined(_WIN32) || defined(_MSC_VER)
+            InterlockedExchange(&rt->merge_pool.float_in_use, 0);
+#else
+            atomic_flag_clear(&rt->merge_pool.float_in_use);
+#endif
+            return NULL;
+        }
+        rt->merge_pool.float_size = count;
+    }
+    return rt->merge_pool.float_buffer;
+}
+
+static void vsort_merge_buffer_release_float32(void)
+{
+    vsort_runtime_t *rt = vsort_runtime();
+#if defined(_WIN32) || defined(_MSC_VER)
+    InterlockedExchange(&rt->merge_pool.float_in_use, 0);
+#else
+    atomic_flag_clear(&rt->merge_pool.float_in_use);
 #endif
 }
 
@@ -659,7 +811,7 @@ static void vsort_heapsort_float32(float *data, size_t count)
     }
 }
 
-static size_t vsort_partition_int32(int *data, size_t count)
+static size_t vsort_partition_int32(int *data, size_t count, unsigned int flags)
 {
     size_t last = count - 1;
     size_t mid = count / 2;
@@ -675,6 +827,61 @@ static size_t vsort_partition_int32(int *data, size_t count)
     int pivot = data[last];
 
     size_t i = 0;
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    bool allow_simd = (flags & VSORT_FLAG_FORCE_SIMD) != 0u;
+    allow_simd = allow_simd || (vsort_runtime()->hardware.has_neon && (flags & VSORT_FLAG_PREFER_THROUGHPUT));
+    if (allow_simd && count >= 32)
+    {
+        int32x4_t pivot_vec = vdupq_n_s32(pivot);
+        size_t j = 0;
+        for (; j + 4 <= last; j += 4)
+        {
+            int32x4_t values = vld1q_s32(data + j);
+            uint32x4_t mask = vcleq_s32(values, pivot_vec);
+            uint64_t mask_bits = vgetq_lane_u64(vreinterpretq_u64_u32(mask), 0) |
+                                 (vgetq_lane_u64(vreinterpretq_u64_u32(mask), 1) << 32);
+            if (mask_bits == 0xFFFFFFFFFFFFFFFFULL)
+            {
+                if (i == j)
+                {
+                    i += 4;
+                }
+                else
+                {
+                    for (size_t k = 0; k < 4; ++k)
+                    {
+                        if (data[j + k] <= pivot)
+                        {
+                            vsort_swap_int(&data[i], &data[j + k]);
+                            ++i;
+                        }
+                    }
+                }
+            }
+            else if (mask_bits != 0)
+            {
+                for (size_t k = 0; k < 4; ++k)
+                {
+                    if (data[j + k] <= pivot)
+                    {
+                        vsort_swap_int(&data[i], &data[j + k]);
+                        ++i;
+                    }
+                }
+            }
+        }
+        for (; j < last; ++j)
+        {
+            if (data[j] <= pivot)
+            {
+                vsort_swap_int(&data[i], &data[j]);
+                ++i;
+            }
+        }
+        vsort_swap_int(&data[i], &data[last]);
+        return i;
+    }
+#endif
     for (size_t j = 0; j < last; ++j)
     {
         if (data[j] <= pivot)
@@ -715,7 +922,7 @@ static size_t vsort_partition_float32(float *data, size_t count)
     return i;
 }
 
-static void vsort_introsort_int32_impl(int *data, size_t count, size_t depth_limit)
+static void vsort_introsort_int32_impl(int *data, size_t count, size_t depth_limit, unsigned int flags)
 {
     size_t threshold = vsort_runtime()->thresholds.insertion_threshold;
 
@@ -727,21 +934,21 @@ static void vsort_introsort_int32_impl(int *data, size_t count, size_t depth_lim
             return;
         }
 
-        size_t pivot_index = vsort_partition_int32(data, count);
+        size_t pivot_index = vsort_partition_int32(data, count, flags);
         size_t left_count = pivot_index;
         size_t right_count = count - pivot_index - 1;
 
         if (left_count < right_count)
         {
             if (left_count > 0)
-                vsort_introsort_int32_impl(data, left_count, depth_limit - 1);
+                vsort_introsort_int32_impl(data, left_count, depth_limit - 1, flags);
             data += pivot_index + 1;
             count = right_count;
         }
         else
         {
             if (right_count > 0)
-                vsort_introsort_int32_impl(data + pivot_index + 1, right_count, depth_limit - 1);
+                vsort_introsort_int32_impl(data + pivot_index + 1, right_count, depth_limit - 1, flags);
             count = left_count;
         }
     }
@@ -783,7 +990,7 @@ static void vsort_introsort_float32_impl(float *data, size_t count, size_t depth
     vsort_insertion_sort_float32(data, count);
 }
 
-static void vsort_introsort_int32(int *data, size_t count)
+static void vsort_introsort_int32(int *data, size_t count, unsigned int flags)
 {
     if (count <= 1)
         return;
@@ -791,7 +998,7 @@ static void vsort_introsort_int32(int *data, size_t count)
     size_t depth_limit = 2 * vsort_floor_log2(count);
     if (depth_limit == 0)
         depth_limit = 1;
-    vsort_introsort_int32_impl(data, count, depth_limit);
+    vsort_introsort_int32_impl(data, count, depth_limit, flags);
 }
 
 static void vsort_introsort_float32(float *data, size_t count)
@@ -816,6 +1023,35 @@ static void vsort_merge_int32(int *data, int *buffer, size_t left, size_t mid, s
     size_t i = 0;
     size_t j = mid;
     size_t dest = left;
+
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    if (left_count >= 8 && right - mid >= 8)
+    {
+        while (i + 4 <= left_count && j + 4 <= right)
+        {
+            int32x4_t left_vec = vld1q_s32(buffer + left + i);
+            int32x4_t right_vec = vld1q_s32(data + j);
+            uint32x4_t cmp = vcleq_s32(left_vec, right_vec);
+            uint64_t mask_bits = vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 0) |
+                                 (vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 1) << 32);
+            if (mask_bits == 0xFFFFFFFFFFFFFFFFULL)
+            {
+                vst1q_s32(data + dest, left_vec);
+                dest += 4;
+                i += 4;
+                continue;
+            }
+            if (mask_bits == 0)
+            {
+                vst1q_s32(data + dest, right_vec);
+                dest += 4;
+                j += 4;
+                continue;
+            }
+            break;
+        }
+    }
+#endif
 
     while (i < left_count && j < right)
     {
@@ -845,6 +1081,35 @@ static void vsort_merge_float32(float *data, float *buffer, size_t left, size_t 
     size_t i = 0;
     size_t j = mid;
     size_t dest = left;
+
+#if defined(__ARM_NEON) || defined(__ARM_NEON__)
+    if (left_count >= 8 && right - mid >= 8)
+    {
+        while (i + 4 <= left_count && j + 4 <= right)
+        {
+            float32x4_t left_vec = vld1q_f32(buffer + left + i);
+            float32x4_t right_vec = vld1q_f32(data + j);
+            uint32x4_t cmp = vcleq_f32(left_vec, right_vec);
+            uint64_t mask_bits = vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 0) |
+                                 (vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 1) << 32);
+            if (mask_bits == 0xFFFFFFFFFFFFFFFFULL)
+            {
+                vst1q_f32(data + dest, left_vec);
+                dest += 4;
+                i += 4;
+                continue;
+            }
+            if (mask_bits == 0)
+            {
+                vst1q_f32(data + dest, right_vec);
+                dest += 4;
+                j += 4;
+                continue;
+            }
+            break;
+        }
+    }
+#endif
 
     while (i < left_count && j < right)
     {
@@ -906,12 +1171,18 @@ static bool vsort_mergesort_int32(int *data, size_t count)
     if (count <= 1)
         return true;
 
-    int *buffer = vsort_aligned_malloc(count * sizeof(int));
+    int *buffer = vsort_merge_buffer_int32(count);
+    bool pooled = buffer != NULL;
+    if (!buffer)
+        buffer = vsort_aligned_malloc(count * sizeof(int));
     if (!buffer)
         return false;
 
     vsort_mergesort_int32_impl(data, buffer, 0, count);
-    vsort_aligned_free(buffer);
+    if (pooled)
+        vsort_merge_buffer_release_int32();
+    else
+        vsort_aligned_free(buffer);
     return true;
 }
 
@@ -920,12 +1191,18 @@ static bool vsort_mergesort_float32(float *data, size_t count)
     if (count <= 1)
         return true;
 
-    float *buffer = vsort_aligned_malloc(count * sizeof(float));
+    float *buffer = vsort_merge_buffer_float32(count);
+    bool pooled = buffer != NULL;
+    if (!buffer)
+        buffer = vsort_aligned_malloc(count * sizeof(float));
     if (!buffer)
         return false;
 
     vsort_mergesort_float32_impl(data, buffer, 0, count);
-    vsort_aligned_free(buffer);
+    if (pooled)
+        vsort_merge_buffer_release_float32();
+    else
+        vsort_aligned_free(buffer);
     return true;
 }
 
@@ -1089,8 +1366,6 @@ static bool vsort_is_nearly_sorted_float32(const float *data, size_t count, size
 
 static bool vsort_parallel_int32(int *data, size_t count, unsigned int flags)
 {
-    VSORT_UNUSED(flags);
-
     if (count < 2)
         return true;
 
@@ -1103,7 +1378,11 @@ static bool vsort_parallel_int32(int *data, size_t count, unsigned int flags)
     if (chunk_count == 0)
         return false;
 
-    dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+    dispatch_qos_class_t qos = QOS_CLASS_USER_INITIATED;
+    if (flags & VSORT_FLAG_PREFER_EFFICIENCY)
+        qos = QOS_CLASS_UTILITY;
+
+    dispatch_queue_t queue = dispatch_get_global_queue(qos, 0);
 
     dispatch_apply(chunk_count, queue, ^(size_t index) {
       size_t begin = index * chunk;
@@ -1122,10 +1401,13 @@ static bool vsort_parallel_int32(int *data, size_t count, unsigned int flags)
       size_t depth = 2 * vsort_floor_log2(local);
       if (depth == 0)
           depth = 1;
-      vsort_introsort_int32_impl(data + begin, local, depth);
+      vsort_introsort_int32_impl(data + begin, local, depth, flags);
     });
 
-    int *buffer = vsort_aligned_malloc(count * sizeof(int));
+    int *buffer = vsort_merge_buffer_int32(count);
+    bool pooled = buffer != NULL;
+    if (!buffer)
+        buffer = vsort_aligned_malloc(count * sizeof(int));
     if (!buffer)
         return false;
 
@@ -1138,18 +1420,23 @@ static bool vsort_parallel_int32(int *data, size_t count, unsigned int flags)
           size_t right = VSORT_MIN(left + width * 2, count);
 
           if (mid < right)
+          {
+              if (data[mid - 1] <= data[mid])
+                  return;
               vsort_merge_int32(data, buffer, left, mid, right);
+          }
         });
     }
 
-    vsort_aligned_free(buffer);
+    if (pooled)
+        vsort_merge_buffer_release_int32();
+    else
+        vsort_aligned_free(buffer);
     return true;
 }
 
 static bool vsort_parallel_float32(float *data, size_t count, unsigned int flags)
 {
-    VSORT_UNUSED(flags);
-
     if (count < 2)
         return true;
 
@@ -1162,7 +1449,11 @@ static bool vsort_parallel_float32(float *data, size_t count, unsigned int flags
     if (chunk_count == 0)
         return false;
 
-    dispatch_queue_t queue = dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0);
+    dispatch_qos_class_t qos = QOS_CLASS_USER_INITIATED;
+    if (flags & VSORT_FLAG_PREFER_EFFICIENCY)
+        qos = QOS_CLASS_UTILITY;
+
+    dispatch_queue_t queue = dispatch_get_global_queue(qos, 0);
 
     dispatch_apply(chunk_count, queue, ^(size_t index) {
       size_t begin = index * chunk;
@@ -1184,7 +1475,10 @@ static bool vsort_parallel_float32(float *data, size_t count, unsigned int flags
       vsort_introsort_float32_impl(data + begin, local, depth);
     });
 
-    float *buffer = vsort_aligned_malloc(count * sizeof(float));
+    float *buffer = vsort_merge_buffer_float32(count);
+    bool pooled = buffer != NULL;
+    if (!buffer)
+        buffer = vsort_aligned_malloc(count * sizeof(float));
     if (!buffer)
         return false;
 
@@ -1197,11 +1491,18 @@ static bool vsort_parallel_float32(float *data, size_t count, unsigned int flags
           size_t right = VSORT_MIN(left + width * 2, count);
 
           if (mid < right)
+          {
+              if (data[mid - 1] <= data[mid])
+                  return;
               vsort_merge_float32(data, buffer, left, mid, right);
+          }
         });
     }
 
-    vsort_aligned_free(buffer);
+    if (pooled)
+        vsort_merge_buffer_release_float32();
+    else
+        vsort_aligned_free(buffer);
     return true;
 }
 
@@ -1226,6 +1527,10 @@ VSORT_API vsort_result_t vsort_sort(const vsort_options_t *options)
 
     vsort_runtime_t *rt = vsort_runtime();
     unsigned int flags = options->flags ? options->flags : rt->default_flags;
+    if ((flags & VSORT_FLAG_PREFER_EFFICIENCY) && (flags & VSORT_FLAG_PREFER_THROUGHPUT))
+        flags &= ~VSORT_FLAG_PREFER_EFFICIENCY;
+    if (!(flags & VSORT_FLAG_PREFER_EFFICIENCY))
+        flags |= VSORT_FLAG_PREFER_THROUGHPUT;
 
     switch (options->kind)
     {
@@ -1239,7 +1544,7 @@ VSORT_API vsort_result_t vsort_sort(const vsort_options_t *options)
             if (!vsort_mergesort_int32(data, count))
             {
                 vsort_log_warning("Stable sort allocation failed, falling back to introsort.");
-                vsort_introsort_int32(data, count);
+                vsort_introsort_int32(data, count, flags);
             }
             return VSORT_OK;
         }
@@ -1259,6 +1564,8 @@ VSORT_API vsort_result_t vsort_sort(const vsort_options_t *options)
         }
 
         bool use_parallel = (flags & VSORT_FLAG_ALLOW_PARALLEL) && count >= rt->thresholds.parallel_threshold;
+        if (flags & VSORT_FLAG_PREFER_EFFICIENCY)
+            use_parallel = use_parallel && count >= (rt->thresholds.parallel_threshold * 2);
 #if defined(VSORT_APPLE) && defined(__arm64__)
         if (use_parallel)
         {
@@ -1273,7 +1580,7 @@ VSORT_API vsort_result_t vsort_sort(const vsort_options_t *options)
         if (attempted_radix)
             vsort_log_debug("Radix sort unavailable, using introsort for %zu int elements.", count);
 
-        vsort_introsort_int32(data, count);
+        vsort_introsort_int32(data, count, flags);
         return VSORT_OK;
     }
     case VSORT_KIND_FLOAT32:
@@ -1298,6 +1605,8 @@ VSORT_API vsort_result_t vsort_sort(const vsort_options_t *options)
         }
 
         bool use_parallel = (flags & VSORT_FLAG_ALLOW_PARALLEL) && count >= rt->thresholds.parallel_threshold;
+        if (flags & VSORT_FLAG_PREFER_EFFICIENCY)
+            use_parallel = use_parallel && count >= (rt->thresholds.parallel_threshold * 2);
 #if defined(VSORT_APPLE) && defined(__arm64__)
         if (use_parallel)
         {

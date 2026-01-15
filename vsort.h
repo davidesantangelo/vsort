@@ -55,9 +55,9 @@ extern "C"
  * Version information
  */
 #define VSORT_VERSION_MAJOR 1
-#define VSORT_VERSION_MINOR 0
+#define VSORT_VERSION_MINOR 1
 #define VSORT_VERSION_PATCH 0
-#define VSORT_VERSION_STRING "1.0.0"
+#define VSORT_VERSION_STRING "1.1.0"
 
 // -----------------------------------------------------------------------------
 // Public configuration API
@@ -82,6 +82,9 @@ typedef enum
 #define VSORT_FLAG_ALLOW_PARALLEL (1u << 0)
 #define VSORT_FLAG_ALLOW_RADIX (1u << 1)
 #define VSORT_FLAG_FORCE_STABLE (1u << 2)
+#define VSORT_FLAG_PREFER_THROUGHPUT (1u << 3)
+#define VSORT_FLAG_PREFER_EFFICIENCY (1u << 4)
+#define VSORT_FLAG_FORCE_SIMD (1u << 5)
 
 typedef struct
 {

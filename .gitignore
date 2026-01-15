@@ -62,6 +62,7 @@ Thumbs.db
 *.kdev4
 .kdev4/
 .directory
+.cache/
 
 # Debug files
 *.dSYM/
