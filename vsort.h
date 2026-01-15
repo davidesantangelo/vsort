@@ -56,8 +56,8 @@ extern "C"
  */
 #define VSORT_VERSION_MAJOR 1
 #define VSORT_VERSION_MINOR 1
-#define VSORT_VERSION_PATCH 1
-#define VSORT_VERSION_STRING "1.1.1"
+#define VSORT_VERSION_PATCH 2
+#define VSORT_VERSION_STRING "1.1.2"
 
 // -----------------------------------------------------------------------------
 // Public configuration API

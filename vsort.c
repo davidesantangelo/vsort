@@ -828,8 +828,7 @@ static size_t vsort_partition_int32(int *data, size_t count, unsigned int flags)
 
     size_t i = 0;
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
-    bool allow_simd = (flags & VSORT_FLAG_FORCE_SIMD) != 0u;
-    allow_simd = allow_simd || (vsort_runtime()->hardware.has_neon && (flags & VSORT_FLAG_PREFER_THROUGHPUT));
+    bool allow_simd = (flags & VSORT_FLAG_FORCE_SIMD) != 0u && vsort_runtime()->hardware.has_neon;
     if (allow_simd && count >= 32)
     {
         int32x4_t pivot_vec = vdupq_n_s32(pivot);
