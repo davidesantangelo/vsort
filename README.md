@@ -13,10 +13,10 @@ VSort is a high-performance sorting library designed to leverage the unique arch
 - [Building & Testing](#building-and-testing)
 - [Technical Details](#technical-details)
 
-## What's New in 1.1.0
+## What's New in 1.1.1
 
 - **Throughput vs efficiency knobs** &mdash; new flags `VSORT_FLAG_PREFER_THROUGHPUT` and `VSORT_FLAG_PREFER_EFFICIENCY` bias parallelism decisions per call.
-- **SIMD-ready partitions/merges** &mdash; Apple Silicon builds can opt into NEON-accelerated hot paths via `VSORT_FLAG_FORCE_SIMD`.
+- **SIMD-ready partitions** &mdash; Apple Silicon builds can opt into NEON-accelerated partitioning via `VSORT_FLAG_FORCE_SIMD`.
 - **Parallel merge tune-up** &mdash; skip already-ordered segments and reuse merge buffers to lower overhead and energy.
 - **Calibrated thresholds** &mdash; improved sampling and P-core aware parallel thresholds for Apple Silicon.
 - **Apple Silicon test coverage** &mdash; added stress coverage for parallel merge correctness.

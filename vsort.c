@@ -1025,32 +1025,7 @@ static void vsort_merge_int32(int *data, int *buffer, size_t left, size_t mid, s
     size_t dest = left;
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
-    if (left_count >= 8 && right - mid >= 8)
-    {
-        while (i + 4 <= left_count && j + 4 <= right)
-        {
-            int32x4_t left_vec = vld1q_s32(buffer + left + i);
-            int32x4_t right_vec = vld1q_s32(data + j);
-            uint32x4_t cmp = vcleq_s32(left_vec, right_vec);
-            uint64_t mask_bits = vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 0) |
-                                 (vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 1) << 32);
-            if (mask_bits == 0xFFFFFFFFFFFFFFFFULL)
-            {
-                vst1q_s32(data + dest, left_vec);
-                dest += 4;
-                i += 4;
-                continue;
-            }
-            if (mask_bits == 0)
-            {
-                vst1q_s32(data + dest, right_vec);
-                dest += 4;
-                j += 4;
-                continue;
-            }
-            break;
-        }
-    }
+    VSORT_UNUSED(left_count);
 #endif
 
     while (i < left_count && j < right)
@@ -1083,32 +1058,7 @@ static void vsort_merge_float32(float *data, float *buffer, size_t left, size_t 
     size_t dest = left;
 
 #if defined(__ARM_NEON) || defined(__ARM_NEON__)
-    if (left_count >= 8 && right - mid >= 8)
-    {
-        while (i + 4 <= left_count && j + 4 <= right)
-        {
-            float32x4_t left_vec = vld1q_f32(buffer + left + i);
-            float32x4_t right_vec = vld1q_f32(data + j);
-            uint32x4_t cmp = vcleq_f32(left_vec, right_vec);
-            uint64_t mask_bits = vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 0) |
-                                 (vgetq_lane_u64(vreinterpretq_u64_u32(cmp), 1) << 32);
-            if (mask_bits == 0xFFFFFFFFFFFFFFFFULL)
-            {
-                vst1q_f32(data + dest, left_vec);
-                dest += 4;
-                i += 4;
-                continue;
-            }
-            if (mask_bits == 0)
-            {
-                vst1q_f32(data + dest, right_vec);
-                dest += 4;
-                j += 4;
-                continue;
-            }
-            break;
-        }
-    }
+    VSORT_UNUSED(left_count);
 #endif
 
     while (i < left_count && j < right)
